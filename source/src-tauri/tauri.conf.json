@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Prompt Forge",
+  "version": "0.10.1",
+  "identifier": "com.promptforge.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Prompt Forge",
+        "width": 1180,
+        "height": 680,
+        "minWidth": 760,
+        "minHeight": 600,
+        "maximized": true,
+        "center": true,
+        "resizable": true,
+        "decorations": true,
+        "backgroundColor": "#080a0e"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "useLocalToolsDir": true,
+    "publisher": "Prompt Forge",
+    "copyright": "Copyright © 2026 Prompt Forge",
+    "shortDescription": "通过多轮澄清锻造专业提示词",
+    "longDescription": "Prompt Forge 是一款本地优先的提示词优化桌面工具，通过可解释的多轮提问，将模糊想法转化为结构化的专业提示词。",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

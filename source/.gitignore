@@ -1,0 +1,10 @@
+node_modules
+dist
+.pnpm-store
+.toolchain
+target
+output
+src-tauri/target
+*.log
+.DS_Store
+Thumbs.db

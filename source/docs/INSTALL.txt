@@ -1,0 +1,37 @@
+Prompt Forge 0.10.1 — Windows x64
+================================
+
+安装版（推荐）
+--------------
+双击“Prompt Forge_0.10.1_x64-setup.exe”，按向导完成安装。
+安装范围为当前用户，通常不需要管理员权限。
+
+便携版
+------
+打开“便携版”文件夹，双击 prompt-forge.exe 即可运行。
+不要单独移动 prompt-forge.exe；同目录的 WebView2Loader.dll 是运行依赖。
+
+系统要求
+--------
+- Windows 10 或 Windows 11 x64
+- Microsoft Edge WebView2 Runtime
+
+首次使用
+--------
+1. 点击右上角“设置”。
+2. 选择 OpenAI、DeepSeek、Claude 兼容网关或 Ollama。
+3. 填写 OpenAI 兼容 Base URL、模型 ID 和 API Key。
+4. 保存后点击“测试连接”。
+
+隐私与数据
+----------
+- 应用不包含任何 API Key。
+- API Key 保存在 Windows 凭据管理器、macOS 钥匙串或 Linux Secret Service。
+- 历史与项目保存在本机 SQLite。
+- 外观设置保存在本地 WebView 存储。
+- 模型调用产生的 Token 费用由所选服务商结算。
+
+发布说明
+--------
+本安装包未进行商业代码签名，Windows SmartScreen 可能显示“未知发布者”。
+分发前请确认来源和 SHA256SUMS.txt 中的校验值。

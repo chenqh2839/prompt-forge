@@ -1,0 +1,114 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  style="background-color: #080a0e; color-scheme: dark"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080a0e" />
+    <meta
+      name="description"
+      content="Prompt Forge - 通过多轮澄清，把模糊想法打磨成专业提示词。"
+    />
+    <script src="/theme-bootstrap.js"></script>
+    <style>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        background-color: var(--bg-color, #080a0e);
+      }
+
+      body {
+        overflow: hidden;
+      }
+
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: var(--text-main, #e8edf2);
+        font-family:
+          "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+        background:
+          radial-gradient(
+            720px 480px at 76% -10%,
+            color-mix(
+              in srgb,
+              var(--primary-color, #70e1b6) 10%,
+              transparent
+            ),
+            transparent 70%
+          ),
+          var(--bg-color, #080a0e);
+      }
+
+      .boot-splash-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        opacity: 0.92;
+      }
+
+      .boot-splash-mark {
+        display: grid;
+        width: 46px;
+        height: 46px;
+        place-items: center;
+        border: 1px solid
+          color-mix(
+            in srgb,
+            var(--primary-color, #70e1b6) 55%,
+            transparent
+          );
+        border-radius: 12px;
+        color: var(--primary-color, #70e1b6);
+        font-family: Consolas, monospace;
+        font-size: 19px;
+        font-weight: 700;
+      }
+
+      .boot-splash-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .boot-splash-copy strong {
+        font-family: Consolas, monospace;
+        font-size: 13px;
+        letter-spacing: 0.16em;
+      }
+
+      .boot-splash-copy span {
+        color: color-mix(
+          in srgb,
+          var(--text-main, #e8edf2) 58%,
+          var(--bg-color, #080a0e)
+        );
+        font-family: Consolas, monospace;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+      }
+    </style>
+    <title>Prompt Forge</title>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-splash" aria-hidden="true">
+        <div class="boot-splash-card">
+          <span class="boot-splash-mark">PF</span>
+          <span class="boot-splash-copy">
+            <strong>PROMPT FORGE</strong>
+            <span>LOCAL STUDIO / STARTING</span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

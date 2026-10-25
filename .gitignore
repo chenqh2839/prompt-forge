@@ -1,0 +1,60 @@
+# Dependencies and build output
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+target/
+**/target/
+.pnpm-store/
+**/.pnpm-store/
+.toolchain/
+**/.toolchain/
+*.tsbuildinfo
+
+# Local user data and databases
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+.cargo/credentials
+.cargo/credentials.toml
+
+# Logs, temporary files, and local release staging
+logs/
+*.log
+*.tmp
+*.bak
+output/
+release-assets/
+artifacts/
+
+# Installers, packages, and debugging symbols
+*.zip
+*.exe
+*.msi
+*.msix
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.pdb
+*.dSYM/
+
+# Editor and operating-system metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
