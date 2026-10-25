@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+# Gitleaks' generic-api-key rule matches this public localStorage key because of
+# its name and string entropy. The value is a browser storage identifier, not a
+# credential. Keep the exception limited to the exact declaration and value.
+[allowlist]
+description = "Allow the public Prompt Forge localStorage preference key"
+regexTarget = "match"
+regexes = [
+  '''KEEP_ATTACHMENTS_STORAGE_KEY\s*=\s*"prompt-forge-keep-attachments-v1"''',
+]

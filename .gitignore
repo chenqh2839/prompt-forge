@@ -14,6 +14,8 @@ target/
 # Local user data and databases
 *.sqlite3
 *.sqlite3-*
+*.sqlite
+*.sqlite-*
 *.db
 *.db-*
 
@@ -37,9 +39,12 @@ logs/
 *.log
 *.tmp
 *.bak
+*.lnk
 output/
 release-assets/
 artifacts/
+screenshots-local/
+local-screenshots/
 
 # Installers, packages, and debugging symbols
 *.zip

@@ -1,0 +1,28 @@
+## Rust Dependencies
+
+This section lists Rust dependencies from the complete locked dependency graph.
+The exact set of components compiled into a particular binary can depend on the
+target platform and enabled features.
+
+### License summary
+
+{{#each overview}}
+- {{name}} ({{count}} crates)
+{{/each}}
+
+### Components and license texts
+
+{{#each licenses}}
+#### {{name}}
+
+Used by:
+
+{{#each used_by}}
+- `{{crate.name}} {{crate.version}}`{{#if crate.repository}} - {{crate.repository}}{{/if}}
+{{/each}}
+
+```text
+{{text}}
+```
+
+{{/each}}

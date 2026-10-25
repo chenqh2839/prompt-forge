@@ -3,6 +3,7 @@ name = "prompt-forge"
 version = "0.10.1"
 description = "A local-first prompt refinement desktop application"
 authors = ["Prompt Forge"]
+license = "Apache-2.0"
 edition = "2021"
 
 [lib]

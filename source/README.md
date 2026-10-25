@@ -194,3 +194,29 @@ src-tauri/src/lib.rs    SQLite、凭据库、模型 API 与命令
 src-tauri/              Tauri 配置、权限、图标与 Rust 工程
 docs/                   PRD、架构和开发指引
 ```
+
+## 平台验证状态
+
+- Windows 10/11 x64：已完成安装、启动和卸载烟雾测试。
+- macOS、Linux：仅完成源码兼容与 CI 构建覆盖，尚未在真实设备上验证安装、运行、系统凭据和卸载行为。
+- 当前版本尚未使用真实云服务 API Key 完成联网模型调用验证。
+
+## 隐私与数据
+
+- API Key 应保存于 Windows 凭据管理器、macOS Keychain 或 Linux Secret Service。
+- Windows SQLite 数据库位于 `%APPDATA%\com.promptforge.desktop\prompt-forge.sqlite3`。
+- Windows WebView 主题与本地配置位于 `%LOCALAPPDATA%\com.promptforge.desktop`。
+- 卸载应用不会自动删除数据库、主题配置或系统凭据。
+- 模型调用时，用户选择的内容会发送至用户配置的模型服务 endpoint；Token 费用由用户承担。
+
+## 第三方组件与免责声明
+
+本应用使用第三方开源组件，包括以 ISC License 分发的 Lucide 图标。完整依赖许可证见仓库根目录的 `THIRD-PARTY-NOTICES.md`。
+
+OpenAI、DeepSeek、Anthropic、Claude、Ollama 等名称仅用于描述兼容性或用户可配置的服务 endpoint。Prompt Forge 与这些服务商不存在官方关联、认证或赞助关系。
+
+使用者应自行核查其输入、模板、第三方名称、品牌、人物、受版权保护素材和目标平台政策所涉及的授权、商标权、肖像权与再分发要求。
+
+## License
+
+Source code and documentation authored for Prompt Forge are licensed under the Apache License 2.0. See the repository root `LICENSE` and `THIRD-PARTY-NOTICES.md`.

@@ -59,6 +59,21 @@ Prompt Forge 是独立项目，与 OpenAI、DeepSeek、Anthropic、Claude、Olla
 受版权保护素材及目标平台政策所涉及的授权、商标权、肖像权和再分发许可。出现
 第三方名称不构成自动禁止使用，但不应暗示官方授权或合作关系。
 
+## 许可证
+
+Project code and documentation authored for Prompt Forge are licensed under
+the Apache License 2.0. Third-party packages remain under their respective
+licenses. See the repository's `LICENSE`, `NOTICE`, and
+`THIRD-PARTY-NOTICES.md`.
+
+The application uses Lucide interface icons under the ISC License. The release
+notices cover frontend production dependencies and the complete locked Rust
+dependency graph, including target-specific transitive dependencies.
+
+The Apache-2.0 license does not grant trademark rights. Open-source materials
+and project assets remain subject to the provenance and authorization checks
+described in `ASSET_PROVENANCE.md`.
+
 ## 已知限制
 
 - 真实云模型服务仍需使用用户自己的低额度 Key 完成联网验证。
