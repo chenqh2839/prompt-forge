@@ -1,11 +1,12 @@
 use std::{
     fs,
+    net::IpAddr,
     path::PathBuf,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use keyring::Entry;
-use reqwest::StatusCode;
+use reqwest::{StatusCode, Url};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -866,10 +867,7 @@ fn clear_api_key(state: State<'_, AppState>) -> Result<AppSettings, String> {
 }
 
 fn validate_settings_input(input: &SettingsInput) -> Result<(), String> {
-    let url = input.base_url.trim();
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("Base URL 必须以 http:// 或 https:// 开头。".to_string());
-    }
+    validate_base_url(&input.base_url)?;
     if input.model.trim().is_empty() {
         return Err("模型名称不能为空。".to_string());
     }
@@ -877,6 +875,40 @@ fn validate_settings_input(input: &SettingsInput) -> Result<(), String> {
     if !ALLOWED_PROVIDERS.contains(&input.provider.as_str()) {
         return Err("不支持的服务类型。".to_string());
     }
+    Ok(())
+}
+
+fn validate_base_url(raw_url: &str) -> Result<(), String> {
+    let url = Url::parse(raw_url.trim()).map_err(|_| "Base URL 格式无效。".to_string())?;
+
+    if !matches!(url.scheme(), "https" | "http") {
+        return Err("Base URL 必须使用 https://；只有本机服务可使用 http://。".to_string());
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("Base URL 不得包含用户名或密码。".to_string());
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err("Base URL 不得包含 query 或 fragment。".to_string());
+    }
+
+    if url.scheme() == "http" {
+        let host = url
+            .host_str()
+            .ok_or_else(|| "Base URL 缺少主机名。".to_string())?;
+        let normalized_host = host.trim_matches(['[', ']']);
+        let is_loopback = normalized_host.eq_ignore_ascii_case("localhost")
+            || normalized_host
+                .parse::<IpAddr>()
+                .map(|address| address.is_loopback())
+                .unwrap_or(false);
+        if !is_loopback {
+            return Err(
+                "远程 Base URL 必须使用 HTTPS；明文 HTTP 仅允许 localhost、127.0.0.1 或 ::1。"
+                    .to_string(),
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -3465,6 +3497,35 @@ mod tests {
             endpoint_for("https://api.example.com/v1/chat/completions"),
             "https://api.example.com/v1/chat/completions"
         );
+    }
+
+    #[test]
+    fn accepts_https_and_loopback_http_base_urls() {
+        for url in [
+            "https://api.example.com/v1",
+            "http://localhost:11434/v1",
+            "http://127.0.0.1:11434/v1",
+            "http://[::1]:11434/v1",
+        ] {
+            assert!(validate_base_url(url).is_ok(), "{url} should be accepted");
+        }
+    }
+
+    #[test]
+    fn rejects_remote_plain_http_and_unsafe_url_components() {
+        for url in [
+            "http://api.example.com/v1",
+            "http://localhost.example.com/v1",
+            "http://127.0.0.1.example.com/v1",
+            "ftp://api.example.com/v1",
+            "https://user:password@api.example.com/v1",
+            "https://user@api.example.com/v1",
+            "https://api.example.com/v1?token=value",
+            "https://api.example.com/v1#fragment",
+            "not-a-url",
+        ] {
+            assert!(validate_base_url(url).is_err(), "{url} should be rejected");
+        }
     }
 
     #[test]

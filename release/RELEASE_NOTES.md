@@ -36,6 +36,8 @@ x64 为发布目标，源码基于 Tauri 2、React、TypeScript、Rust 和本地
 ## 隐私与数据
 
 - API Key 由 Windows Credential Manager、macOS Keychain 或 Linux Secret Service 保存。
+- 远程模型 endpoint 必须使用 HTTPS；明文 HTTP 仅允许本机 loopback 服务。
+- 当前已上传的 Windows 二进制早于上述 HTTPS 强制校验修复，尚未重新构建；在重新构建并验证前，不得把该安全修复视为已随二进制发布。
 - SQLite 数据库位于 `%APPDATA%\com.promptforge.desktop\prompt-forge.sqlite3`。
 - WebView 主题与本地配置位于 `%LOCALAPPDATA%\com.promptforge.desktop`。
 - 卸载应用不会自动删除数据库、WebView 数据或系统凭据；如需彻底清除，请先在应用内清除 Key 和历史，再手动删除相关数据。

@@ -323,7 +323,8 @@ export function SettingsDialog({
             />
             <small>
               可填写到 <code>/v1</code>，应用会自动请求
-              <code>/chat/completions</code>。
+              <code>/chat/completions</code>。远程地址必须使用 HTTPS；
+              明文 HTTP 仅允许本机服务。
             </small>
           </label>
 

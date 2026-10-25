@@ -78,6 +78,7 @@ Windows x64 发布压缩包名为 `PromptForge-0.10.1-Windows-x64.zip`，包含�
 5. 点击“测试连接”验证配置。
 
 也可填写完整 `/chat/completions` 地址。Ollama 默认地址为 `http://localhost:11434/v1`，本地服务通常不需要 API Key。
+远程 Base URL 必须使用 `https://`；明文 `http://` 仅允许 `localhost`、`127.0.0.1` 或 `::1`，避免 API Key 在网络上明文传输。
 
 API Key 使用系统凭据库保存：
 

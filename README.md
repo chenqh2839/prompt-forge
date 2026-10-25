@@ -85,6 +85,10 @@ packages, commands, and packaging details.
 Open the application settings, choose a provider preset, enter an
 OpenAI-compatible Base URL and model ID, then save an API key.
 
+Remote endpoints must use HTTPS. Plain HTTP is accepted only for loopback
+services on `localhost`, `127.0.0.1`, or `::1`, so API keys are not sent over
+an unencrypted network connection.
+
 The application does not include API keys or model credits. Token usage and
 provider charges are billed by the service selected by the user. A real cloud
 provider call has not yet been validated with the owner's API key.
