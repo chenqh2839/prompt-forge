@@ -11,7 +11,7 @@ $sourceRoot = Join-Path $RepoRoot "source"
 $cargoRoot = Join-Path $sourceRoot "src-tauri"
 $logsRoot = Join-Path $RepoRoot "logs"
 $outputPath = Join-Path $RepoRoot "THIRD-PARTY-NOTICES.md"
-$npmJson = Join-Path $logsRoot "npm-licenses.json"
+$npmJson = Join-Path $logsRoot "npm-licenses-all.json"
 $rustNotices = Join-Path $logsRoot "rust-notices-generated.md"
 
 New-Item -ItemType Directory -Path $logsRoot -Force | Out-Null
@@ -20,6 +20,12 @@ function Normalize-LicenseText([string]$Text) {
     $normalized = (($Text -replace "`r`n", "`n") -split "`n" |
         ForEach-Object { $_.TrimEnd() }) -join "`n"
     return $normalized.Trim()
+}
+
+$relatedLicenseSources = @{
+    "@napi-rs/canvas-win32-x64-msvc" = "@napi-rs/canvas"
+    "@tauri-apps/cli-win32-x64-msvc" = "@tauri-apps/cli"
+    "@rolldown/binding-win32-x64-msvc" = "rolldown"
 }
 
 if (-not $CargoAboutPath) {
@@ -40,7 +46,7 @@ if (-not $CargoAboutPath -or -not (Test-Path -LiteralPath $CargoAboutPath)) {
 
 Push-Location $sourceRoot
 try {
-    pnpm licenses list --prod --json |
+    pnpm licenses list --json |
         Out-File -LiteralPath $npmJson -Encoding utf8
     if ($LASTEXITCODE -ne 0) {
         throw "pnpm licenses list failed"
@@ -107,14 +113,20 @@ foreach ($license in ($npmData.Keys | Sort-Object)) {
                 }
             }
 
-            if ($package.name -eq '@napi-rs/canvas-win32-x64-msvc') {
-                $mainPackage = $npmData['MIT'] | Where-Object name -eq '@napi-rs/canvas'
-                if ($mainPackage) {
-                    $mainLicense = Join-Path @($mainPackage.paths)[0] 'LICENSE'
-                    if (Test-Path -LiteralPath $mainLicense) {
+            if ($relatedLicenseSources.ContainsKey($package.name)) {
+                $relatedName = $relatedLicenseSources[$package.name]
+                $relatedPackage = foreach ($relatedLicense in $npmData.Keys) {
+                    $npmData[$relatedLicense] | Where-Object name -eq $relatedName
+                }
+                if ($relatedPackage) {
+                    $relatedPath = @($relatedPackage.paths)[0]
+                    $relatedLicense = Get-ChildItem -LiteralPath $relatedPath -File |
+                        Where-Object { $_.Name -match '^(LICEN[CS]E|COPYING|NOTICE)' } |
+                        Select-Object -First 1
+                    if ($relatedLicense) {
                         $texts = @([pscustomobject]@{
-                            Name = '@napi-rs/canvas/LICENSE'
-                            Text = Normalize-LicenseText (Get-Content -LiteralPath $mainLicense -Raw)
+                            Name = "$relatedName/$($relatedLicense.Name)"
+                            Text = Normalize-LicenseText (Get-Content -LiteralPath $relatedLicense.FullName -Raw)
                         })
                     }
                 }
@@ -141,9 +153,10 @@ $lines.Add("")
 $lines.Add("> Generated from the repository lockfiles. Third-party components remain")
 $lines.Add("> subject to their own licenses. This file is not legal advice.")
 $lines.Add("")
-$lines.Add("## Frontend production dependencies")
+$lines.Add("## Frontend dependency graph")
 $lines.Add("")
-$lines.Add("The following packages are included in the production dependency graph.")
+$lines.Add("The following packages are included in the complete locked frontend")
+$lines.Add("dependency graph, including production, development, and build tooling.")
 $lines.Add("`lucide-react` is the source of the interface icon set and is licensed")
 $lines.Add("under the ISC License.")
 $lines.Add("")

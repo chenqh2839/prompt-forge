@@ -67,7 +67,7 @@ licenses. See the repository's `LICENSE`, `NOTICE`, and
 `THIRD-PARTY-NOTICES.md`.
 
 The application uses Lucide interface icons under the ISC License. The release
-notices cover frontend production dependencies and the complete locked Rust
+notices cover the locked frontend dependency graph and the complete locked Rust
 dependency graph, including target-specific transitive dependencies.
 
 The Apache-2.0 license does not grant trademark rights. Open-source materials
