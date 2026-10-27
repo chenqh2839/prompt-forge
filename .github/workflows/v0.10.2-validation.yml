@@ -61,3 +61,18 @@ jobs:
       - name: Run Rust tests
         working-directory: source/src-tauri
         run: cargo test --locked
+
+      - name: Build Windows release bundle
+        working-directory: source
+        run: pnpm desktop:build
+
+      - name: Upload Windows release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-forge-v0.10.2-windows-x64
+          path: |
+            source/src-tauri/target/release/*.exe
+            source/src-tauri/target/release/*.dll
+            source/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
