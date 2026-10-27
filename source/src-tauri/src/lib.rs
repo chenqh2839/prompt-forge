@@ -23,6 +23,7 @@ const MAX_ATTACHMENTS: usize = 6;
 const MAX_ATTACHMENT_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT_CHARS: usize = 60_000;
 const MAX_PROMPT_CONTEXT_CHARS: usize = 24_000;
+const MAX_ROLE_DECISION_CHARS: usize = 240;
 
 struct AppState {
     db_path: PathBuf,
@@ -2270,6 +2271,19 @@ fn parse_decision(content: &str) -> Result<RawDecision, String> {
     })
 }
 
+fn normalize_role_decision(value: &str) -> Option<String> {
+    let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        return None;
+    }
+    Some(
+        collapsed
+            .chars()
+            .take(MAX_ROLE_DECISION_CHARS)
+            .collect::<String>(),
+    )
+}
+
 fn normalize_decision(
     raw: RawDecision,
     reuse_project_role: bool,
@@ -2282,7 +2296,10 @@ fn normalize_decision(
             .map(|prompt| prompt.trim().to_string())
             .filter(|prompt| !prompt.is_empty())
             .ok_or_else(|| "模型判断信息已足够，但没有返回优化提示词。".to_string())?;
-        let role_decision = if raw.role_decision.trim().is_empty() {
+        let role_decision = if let Some(role_decision) = normalize_role_decision(&raw.role_decision)
+        {
+            role_decision
+        } else {
             if !reuse_project_role {
                 "角色复用已关闭，已按当前任务正常设定角色。".to_string()
             } else if !context.has_context {
@@ -2292,8 +2309,6 @@ fn normalize_decision(
             } else {
                 "模型未返回角色判断，已按兼容模式生成。".to_string()
             }
-        } else {
-            raw.role_decision.trim().to_string()
         };
         return Ok(PromptAnalysis {
             action,
@@ -2348,11 +2363,7 @@ fn normalize_decision(
         },
         questions,
         optimized_prompt: None,
-        role_decision: if raw.role_decision.trim().is_empty() {
-            None
-        } else {
-            Some(raw.role_decision.trim().to_string())
-        },
+        role_decision: normalize_role_decision(&raw.role_decision),
         tokens_used: None,
     })
 }
@@ -3960,6 +3971,17 @@ mod tests {
             decision.role_decision.as_deref(),
             Some("已复用项目背景中的角色设定，未重复声明。")
         );
+    }
+
+    #[test]
+    fn role_decision_is_collapsed_to_one_bounded_line() {
+        assert_eq!(
+            normalize_role_decision("已复用项目角色。\n未重复声明。"),
+            Some("已复用项目角色。 未重复声明。".to_string())
+        );
+        let bounded = normalize_role_decision(&"理".repeat(MAX_ROLE_DECISION_CHARS + 50)).unwrap();
+        assert_eq!(bounded.chars().count(), MAX_ROLE_DECISION_CHARS);
+        assert!(!bounded.contains('\n'));
     }
 
     #[test]
