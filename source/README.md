@@ -34,7 +34,7 @@ Prompt Forge 是一个本地优先的提示词优化桌面应用。它先识别�
 - SQLite 本地历史、删除、清空与 JSON 导出
 - API Key 写入系统凭据库，不进入前端或 SQLite
 - Windows NSIS 安装包配置
-- Windows、macOS、Linux 构建检查矩阵
+- Windows 发布 CI；macOS、Linux 目前仅保留源码兼容性，未纳入本发布 CI 矩阵
 
 > 多轮分析与重新生成都会消耗所选服务的 Token。应用不提供任何 API Key；费用由用户与模型服务商结算。
 

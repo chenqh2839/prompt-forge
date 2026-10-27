@@ -6,11 +6,9 @@ and local SQLite.
 
 > Current source snapshot: **v0.10.2**
 >
-> Distribution status: **Windows community preview**. macOS and Linux are not
-> yet verified on real hardware and do not have an official release binary.
->
-> The latest published Windows binary remains **v0.10.1** until a v0.10.2
-> package has been rebuilt and validated.
+> Distribution status: **Windows community preview**. The latest published
+> Windows binary is **v0.10.2**. macOS and Linux are not yet verified on real
+> hardware and do not have an official release binary.
 
 ## Repository layout
 
@@ -41,9 +39,10 @@ The application README is available at
 
 | Platform | Status |
 |---|---|
-| Windows 10/11 x64 | Install, launch, and uninstall smoke tests completed |
-| macOS | Source compatibility and CI build coverage only; not run on real hardware |
-| Linux | Source compatibility and CI build coverage only; not run on real hardware |
+| Windows 11 x64 | v0.10.2 install, upgrade, launch, data migration, SQLite, and UI checks completed on local hardware |
+| Windows 10 x64 | Earlier install and launch smoke tests only; v0.10.2 was not separately retested |
+| macOS | Source compatibility only; not covered by the current release CI or run on real hardware |
+| Linux | Source compatibility only; not covered by the current release CI or run on real hardware |
 
 Cross-platform compilation does not mean that installation, startup, keyring
 access, database migration, or uninstall behavior has been validated.
@@ -55,15 +54,16 @@ Download the latest published Windows archive from
 
 1. Extract the Windows ZIP attached to the latest available Release.
 2. To install, run the versioned NSIS setup executable in `安装版`.
-3. To use the portable build, keep `Prompt Forge.exe` and
-   `WebView2Loader.dll` in the same directory.
+3. To use the portable build, run `Prompt Forge.exe`. The v0.10.2 build uses a
+   static WebView2 loader and does not require a separate `WebView2Loader.dll`.
 
 Microsoft Edge WebView2 Runtime is required.
 
 The current installer is not Authenticode-signed. Windows SmartScreen may show
-an "Unknown publisher" warning. Verify the release archive with the attached
-`SHA256SUMS.txt`; SHA-256 verification confirms file integrity, not publisher
-identity.
+an "Unknown publisher" warning. Verify the release ZIP with
+`SHA256SUMS-v0.10.2.txt`; the extracted archive also contains its own
+`SHA256SUMS.txt` for individual files. SHA-256 verification confirms file
+integrity, not publisher identity.
 
 ## Build from source
 

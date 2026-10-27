@@ -29,12 +29,12 @@
 - The migrated database SHA-256 is
   `ba8716b7fd807f11525350697bf82f725b25d5fa7492cbdf32c741c6081e068d`.
 - The legacy C-drive database no longer exists.
-- No files remain under `%LOCALAPPDATA%\com.promptforge.desktop`; an empty
-  directory shell may remain until the operating system releases it.
+- At final re-review, the legacy
+  `%LOCALAPPDATA%\com.promptforge.desktop` directory and its files were absent.
 - The migration marker records a complete v0.10.2 migration and source cleanup.
-- The API-key service identifier remains `com.promptforge.desktop`. No saved
-  key was present for the checked providers, so credential retrieval could not
-  be exercised with a real credential.
+- The API-key service identifier remains `com.promptforge.desktop`. The settings
+  UI indicated that a credential was present, but this verification did not
+  read or use the credential; live model invocation remains unverified.
 
 ## Verification boundaries
 
