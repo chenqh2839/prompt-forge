@@ -3498,9 +3498,7 @@ pub fn run() {
             let install_dir = env::current_exe()?
                 .parent()
                 .map(Path::to_path_buf)
-                .ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "无法解析 Prompt Forge 安装目录")
-                })?;
+                .ok_or_else(|| std::io::Error::other("无法解析 Prompt Forge 安装目录"))?;
             let preferred_root = preferred_data_root(&legacy_webview_dir);
             let resolved = data_location::resolve_startup(
                 &data_location::AppPaths {
@@ -3512,13 +3510,12 @@ pub fn run() {
                 },
                 env!("CARGO_PKG_VERSION"),
             )
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            .map_err(std::io::Error::other)?;
 
             let state = AppState {
                 db_path: resolved.paths.database_path.clone(),
             };
-            open_db(&state)
-                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            open_db(&state).map_err(std::io::Error::other)?;
             app.manage(state);
             app.manage(DataLocationState {
                 paths: resolved.paths.clone(),

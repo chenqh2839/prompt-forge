@@ -255,21 +255,49 @@ pub fn resolve_startup(app: &AppPaths, version: &str) -> Result<StartupResult, S
         }
     }
 
-    let source = source_from_paths(&current);
+    let source = match source_from_paths(&current) {
+        Ok(source) => source,
+        Err(error) => {
+            return Ok(fallback_result(
+                &current,
+                &app.preferred_root,
+                combine_warning(
+                    current_warning,
+                    Some(format!("无法读取旧数据目录，已回退：{error}")),
+                ),
+            ))
+        }
+    };
     match initialize_default_root(app, version, source.as_ref()) {
         Ok((paths, source_warning)) => {
             config.active_root = Some(paths.root.to_string_lossy().to_string());
             config.pending_change = None;
             config.last_error = None;
             config.updated_at = now_timestamp();
-            write_config(&config_path, &config)?;
+            if let Err(error) = write_config(&config_path, &config) {
+                return Ok(fallback_result(
+                    &current,
+                    &app.preferred_root,
+                    combine_warning(
+                        current_warning,
+                        Some(format!("无法保存数据位置配置，已回退到原目录：{error}")),
+                    ),
+                ));
+            }
+            let cleanup_warning = source.as_ref().and_then(remove_source_data);
+            if cleanup_warning.is_none() && source.is_some() {
+                mark_source_removed(&paths.root, true);
+            }
             Ok(StartupResult {
                 paths,
                 configured_root: Some(PathBuf::from(
                     config.active_root.clone().unwrap_or_default(),
                 )),
                 default_root: app.preferred_root.clone(),
-                warning: combine_warning(current_warning, source_warning),
+                warning: combine_warning(
+                    current_warning,
+                    combine_warning(source_warning, cleanup_warning),
+                ),
             })
         }
         Err(error) => Ok(fallback_result(
@@ -415,7 +443,7 @@ fn apply_pending_change(
             })
         }
         DataRootChangeMode::Migrate => {
-            let source = source_from_paths(current);
+            let source = source_from_paths(current)?;
             if inspection.has_managed_data
                 && !source
                     .as_ref()
@@ -440,6 +468,9 @@ fn apply_pending_change(
             config.updated_at = now_timestamp();
             write_config(config_path, config)?;
             let cleanup_warning = source.as_ref().and_then(remove_source_data);
+            if cleanup_warning.is_none() && source.is_some() {
+                mark_source_removed(&target_paths.root, true);
+            }
             Ok(StartupResult {
                 paths: target_paths,
                 configured_root: Some(target),
@@ -487,13 +518,12 @@ fn initialize_default_root(
 
     let warning = if let Some(source) = source {
         let outcome = migrate_data(source, &target, version)?;
-        let cleanup_warning = remove_source_data(source);
         combine_warning(
             Some(format!(
                 "首次启动已迁移 {} 个文件，共 {} 字节。",
                 outcome.files, outcome.bytes
             )),
-            combine_warning(outcome.warning, cleanup_warning),
+            outcome.warning,
         )
     } else {
         target_paths.ensure_directories()?;
@@ -551,18 +581,18 @@ fn fallback_result(
     }
 }
 
-fn source_from_paths(paths: &DataPaths) -> Option<MigrationSource> {
+fn source_from_paths(paths: &DataPaths) -> Result<Option<MigrationSource>, String> {
     let has_database = paths.database_path.is_file();
-    let has_webview = directory_has_entries(&paths.webview_dir).unwrap_or(false);
+    let has_webview = directory_has_entries(&paths.webview_dir)?;
     if !has_database && !has_webview {
-        return None;
+        return Ok(None);
     }
-    Some(MigrationSource {
+    Ok(Some(MigrationSource {
         label: paths.root.clone(),
         database_path: paths.database_path.clone(),
         webview_dir: paths.webview_dir.clone(),
         managed_root: paths.managed.then(|| paths.root.clone()),
-    })
+    }))
 }
 
 fn migrate_data(
@@ -676,6 +706,20 @@ fn can_resume_migration(target_root: &Path, source: &MigrationSource) -> bool {
     marker.status == "in_progress"
         && marker.target == target_root.to_string_lossy()
         && marker.source == source.label.to_string_lossy()
+}
+
+fn mark_source_removed(target_root: &Path, source_removed: bool) {
+    let marker_path = DataPaths::managed(target_root.to_path_buf())
+        .meta_dir
+        .join(MIGRATION_MARKER);
+    let Ok(bytes) = fs::read(&marker_path) else {
+        return;
+    };
+    let Ok(mut marker) = serde_json::from_slice::<MigrationMarker>(&bytes) else {
+        return;
+    };
+    marker.source_removed = source_removed;
+    let _ = write_json_atomic(&marker_path, &marker);
 }
 
 fn remove_managed_target_dirs(paths: &DataPaths) -> Result<(), String> {
