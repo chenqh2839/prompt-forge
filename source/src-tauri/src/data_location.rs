@@ -436,7 +436,10 @@ fn apply_pending_change(
         }
         DataRootChangeMode::Migrate => {
             let source = source_from_paths(current)?;
-            if inspection.has_managed_data && migration_is_complete(&target, &current.root) {
+            if source.is_none()
+                && inspection.has_managed_data
+                && migration_is_complete(&target, &current.root)
+            {
                 target_paths.ensure_directories()?;
                 config.active_root = Some(target.to_string_lossy().to_string());
                 config.pending_change = None;
@@ -1412,7 +1415,7 @@ mod tests {
     }
 
     #[test]
-    fn completed_marker_recovers_pending_config_without_recopying() {
+    fn completed_marker_does_not_replace_changed_source() {
         let root = temp_dir("completed-recovery");
         let legacy_data = root.join("legacy-data");
         let legacy_webview = root.join("legacy-webview");
@@ -1464,16 +1467,16 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.paths.root, target.canonicalize().unwrap());
-        assert!(!legacy_data.join(DATABASE_FILE).exists());
-        assert!(!legacy_webview.exists());
+        assert!(!result.paths.managed);
+        assert!(legacy_data.join(DATABASE_FILE).is_file());
+        assert!(legacy_webview.exists());
         let saved = load_config(&config_path).unwrap().0;
-        let saved_root = PathBuf::from(saved.active_root.unwrap());
-        assert_eq!(
-            path_key(&normalize_for_compare(&saved_root).unwrap()),
-            path_key(&normalize_for_compare(&target).unwrap())
-        );
+        assert!(saved.active_root.is_none());
         assert!(saved.pending_change.is_none());
+        assert!(saved
+            .last_error
+            .as_deref()
+            .is_some_and(|error| error.contains("已有 Prompt Forge 数据")));
         assert!(!fs::read_dir(&saved_config_dir)
             .unwrap()
             .flatten()
