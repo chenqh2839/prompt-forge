@@ -28,12 +28,14 @@ pub struct DataPaths {
 impl DataPaths {
     pub fn managed(root: PathBuf) -> Self {
         let data_dir = root.join("data");
+        let webview_dir = root.join("webview");
+        let meta_dir = root.join("meta");
         Self {
             root,
             database_path: data_dir.join(DATABASE_FILE),
             data_dir,
-            webview_dir: root.join("webview"),
-            meta_dir: root.join("meta"),
+            webview_dir,
+            meta_dir,
             managed: true,
         }
     }
@@ -229,7 +231,7 @@ pub fn resolve_startup(app: &AppPaths, version: &str) -> Result<StartupResult, S
                 let _ = write_config(&config_path, &config);
                 let warning = combine_warning(
                     current_warning,
-                    format!("数据目录更改未完成，已回退到原目录：{error}"),
+                    Some(format!("数据目录更改未完成，已回退到原目录：{error}")),
                 );
                 return Ok(fallback_result(&current, &app.preferred_root, warning));
             }
@@ -275,7 +277,7 @@ pub fn resolve_startup(app: &AppPaths, version: &str) -> Result<StartupResult, S
             &app.preferred_root,
             combine_warning(
                 current_warning,
-                format!("无法使用配置的数据目录，已回退到默认目录：{error}"),
+                Some(format!("无法使用配置的数据目录，已回退到默认目录：{error}")),
             ),
         )),
     }
@@ -818,7 +820,7 @@ fn is_system_directory(path: &Path) -> Result<bool, String> {
             return Ok(true);
         }
     }
-    #[cfg(target_os = "unix")]
+    #[cfg(target_family = "unix")]
     {
         for root in [
             "/usr", "/etc", "/bin", "/sbin", "/lib", "/boot", "/proc", "/sys",
