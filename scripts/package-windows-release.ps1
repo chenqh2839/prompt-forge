@@ -6,7 +6,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$InstallerExe,
 
-    [Parameter(Mandatory = $true)]
     [string]$WebView2Loader,
 
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\release-assets')
@@ -27,7 +26,11 @@ function Resolve-RequiredFile {
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $portablePath = Resolve-RequiredFile -Path $PortableExe -Label 'Portable executable'
 $installerPath = Resolve-RequiredFile -Path $InstallerExe -Label 'NSIS installer'
-$loaderPath = Resolve-RequiredFile -Path $WebView2Loader -Label 'WebView2Loader.dll'
+$loaderPath = if ($WebView2Loader) {
+    Resolve-RequiredFile -Path $WebView2Loader -Label 'WebView2Loader.dll'
+} else {
+    $null
+}
 
 $outputPath = [System.IO.Path]::GetFullPath($OutputDirectory)
 if (-not $outputPath.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -45,7 +48,9 @@ $archivePath = Join-Path $outputPath "$packageName.zip"
 try {
     New-Item -ItemType Directory -Path $portableDirectory, $installerDirectory -Force | Out-Null
     Copy-Item -LiteralPath $portablePath -Destination (Join-Path $portableDirectory 'Prompt Forge.exe')
-    Copy-Item -LiteralPath $loaderPath -Destination (Join-Path $portableDirectory 'WebView2Loader.dll')
+    if ($loaderPath) {
+        Copy-Item -LiteralPath $loaderPath -Destination (Join-Path $portableDirectory 'WebView2Loader.dll')
+    }
     Copy-Item -LiteralPath $installerPath -Destination (Join-Path $installerDirectory 'Prompt Forge_0.10.2_x64-setup.exe')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'source\docs\INSTALL.txt') -Destination (Join-Path $stagingPackage 'INSTALL.txt')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $stagingPackage 'LICENSE')

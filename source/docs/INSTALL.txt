@@ -9,7 +9,7 @@ Prompt Forge 0.10.2 — Windows x64
 便携版
 ------
 打开“便携版”文件夹，双击 prompt-forge.exe 即可运行。
-不要单独移动 prompt-forge.exe；同目录的 WebView2Loader.dll 是运行依赖。
+本版本静态链接 WebView2 loader，不依赖额外的 WebView2Loader.dll。
 
 系统要求
 --------

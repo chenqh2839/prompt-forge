@@ -65,7 +65,7 @@ Windows x64 发布压缩包建议命名为
 `PromptForge-0.10.2-Windows-x64.zip`，包含：
 
 - 双击安装的 NSIS 安装程序
-- 包含 WebView2Loader 的便携版
+- 便携版可执行文件
 - `安装说明.txt`
 - 内外部 SHA256 校验文件
 
