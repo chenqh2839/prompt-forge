@@ -44,7 +44,10 @@ $tempPath = "$configPath.tmp-$([Guid]::NewGuid().ToString('N'))"
 $json = $config | ConvertTo-Json -Depth 5
 [IO.File]::WriteAllText($tempPath, $json, [Text.UTF8Encoding]::new($false))
 if (Test-Path -LiteralPath $configPath) {
-    Copy-Item -LiteralPath $configPath -Destination "$configPath.bak" -Force
+    [IO.File]::WriteAllBytes(
+        "$configPath.bak",
+        [IO.File]::ReadAllBytes($configPath)
+    )
 }
 [IO.File]::Move($tempPath, $configPath, $true)
 
