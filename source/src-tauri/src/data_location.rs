@@ -384,7 +384,9 @@ pub fn schedule_change(
 
     let mut config = load_config(config_path)?.0;
     config.schema_version = STORAGE_SCHEMA_VERSION;
-    config.active_root = Some(current.root.to_string_lossy().to_string());
+    config.active_root = current
+        .managed
+        .then(|| current.root.to_string_lossy().to_string());
     config.pending_change = Some(PendingChange {
         target_root: target.to_string_lossy().to_string(),
         mode: request.mode,
@@ -1265,6 +1267,146 @@ mod tests {
         assert!(!result.paths.managed);
         assert!(legacy_data.join(DATABASE_FILE).is_file());
         assert!(result.warning.unwrap().contains("都包含数据"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn fresh_startup_creates_managed_layout() {
+        let root = temp_dir("fresh");
+        let config_dir = root.join("config");
+        let target = root.join("managed-target");
+        let install = root.join("install");
+        fs::create_dir_all(&install).unwrap();
+
+        let result = resolve_startup(
+            &AppPaths {
+                config_dir: config_dir.clone(),
+                legacy_data_dir: root.join("missing-legacy-data"),
+                legacy_webview_dir: root.join("missing-legacy-webview"),
+                install_dir: install,
+                preferred_root: target.clone(),
+            },
+            "0.10.2",
+        )
+        .unwrap();
+
+        assert!(result.paths.managed);
+        assert!(result.paths.data_dir.is_dir());
+        assert!(result.paths.webview_dir.is_dir());
+        assert!(result.paths.meta_dir.is_dir());
+        assert!(config_dir.join(STORAGE_CONFIG_FILE).is_file());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pending_change_can_use_existing_data_after_restart() {
+        let root = temp_dir("pending-existing");
+        let config_dir = root.join("config");
+        let legacy_data = root.join("legacy-data");
+        let legacy_webview = root.join("legacy-webview");
+        let target = root.join("managed-target");
+        let install = root.join("install");
+        create_database(&legacy_data.join(DATABASE_FILE));
+        fs::create_dir_all(&legacy_webview).unwrap();
+        fs::write(legacy_webview.join("theme"), b"light").unwrap();
+        create_database(&target.join("data").join(DATABASE_FILE));
+        fs::create_dir_all(target.join("webview")).unwrap();
+        fs::create_dir_all(&install).unwrap();
+
+        let current = DataPaths::legacy(legacy_data.clone(), legacy_webview.clone());
+        let status = schedule_change(
+            &config_path(&config_dir),
+            &current,
+            &install,
+            &target,
+            &DataRootChangeRequest {
+                target_root: target.to_string_lossy().to_string(),
+                mode: DataRootChangeMode::Existing,
+            },
+        )
+        .unwrap();
+        assert!(status.restart_required);
+        assert!(status.configured_root.is_none());
+
+        let result = resolve_startup(
+            &AppPaths {
+                config_dir,
+                legacy_data_dir: legacy_data.clone(),
+                legacy_webview_dir: legacy_webview,
+                install_dir: install,
+                preferred_root: target.clone(),
+            },
+            "0.10.2",
+        )
+        .unwrap();
+        assert!(result.paths.managed);
+        assert_eq!(result.paths.root, target.canonicalize().unwrap());
+        assert!(legacy_data.join(DATABASE_FILE).is_file());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn interrupted_migration_can_restart_from_source() {
+        let root = temp_dir("interrupted");
+        let target = temp_dir("interrupted-target");
+        fs::create_dir_all(&root).unwrap();
+        let source = source_fixture(&root);
+        let target_paths = DataPaths::managed(target.clone());
+        target_paths.ensure_directories().unwrap();
+        write_json_atomic(
+            &target_paths.meta_dir.join(MIGRATION_MARKER),
+            &MigrationMarker {
+                schema_version: STORAGE_SCHEMA_VERSION,
+                status: "in_progress".to_string(),
+                app_version: "0.10.2".to_string(),
+                source: source.label.to_string_lossy().to_string(),
+                target: target.to_string_lossy().to_string(),
+                started_at: now_timestamp(),
+                completed_at: None,
+                files: 0,
+                bytes: 0,
+                source_removed: false,
+            },
+        )
+        .unwrap();
+        create_database(&target_paths.data_dir.join(DATABASE_FILE));
+
+        let outcome = migrate_data(&source, &target, "0.10.2").unwrap();
+        assert!(outcome.files >= 2);
+        assert!(source.database_path.is_file());
+        assert!(target.join("data").join(DATABASE_FILE).is_file());
+        assert!(target.join("webview").join("Local Storage/theme").is_file());
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(target);
+    }
+
+    #[test]
+    fn invalid_target_falls_back_to_legacy_paths() {
+        let root = temp_dir("invalid-target");
+        let legacy_data = root.join("legacy-data");
+        let legacy_webview = root.join("legacy-webview");
+        let install = root.join("install");
+        create_database(&legacy_data.join(DATABASE_FILE));
+        fs::create_dir_all(&legacy_webview).unwrap();
+        fs::create_dir_all(&install).unwrap();
+        let invalid_target = root.join("target-is-a-file");
+        fs::write(&invalid_target, b"not a directory").unwrap();
+
+        let result = resolve_startup(
+            &AppPaths {
+                config_dir: root.join("config"),
+                legacy_data_dir: legacy_data.clone(),
+                legacy_webview_dir: legacy_webview,
+                install_dir: install,
+                preferred_root: invalid_target,
+            },
+            "0.10.2",
+        )
+        .unwrap();
+
+        assert!(!result.paths.managed);
+        assert!(legacy_data.join(DATABASE_FILE).is_file());
+        assert!(result.warning.unwrap().contains("回退"));
         let _ = fs::remove_dir_all(root);
     }
 }
