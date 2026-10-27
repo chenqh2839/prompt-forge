@@ -64,6 +64,33 @@ export interface SettingsInput {
   apiKey?: string;
 }
 
+export type DataRootChangeMode = "existing" | "migrate";
+
+export interface DataLocationStatus {
+  currentRoot: string;
+  configuredRoot?: string | null;
+  defaultRoot: string;
+  databasePath: string;
+  webviewPath: string;
+  bootstrapConfigPath: string;
+  pendingRoot?: string | null;
+  pendingMode?: DataRootChangeMode | null;
+  restartRequired: boolean;
+  warning?: string | null;
+}
+
+export interface DataRootInspection {
+  targetRoot: string;
+  hasExistingData: boolean;
+  hasManagedData: boolean;
+  hasForeignEntries: boolean;
+}
+
+export interface DataRootChangeRequest {
+  targetRoot: string;
+  mode: DataRootChangeMode;
+}
+
 export interface ProjectContext {
   id: string;
   name: string;

@@ -2698,7 +2698,7 @@ button:disabled {
 
 .settings-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   margin-bottom: 17px;
   padding: 3px;
   border: 1px solid var(--line);
@@ -2785,6 +2785,134 @@ button:disabled {
   margin-top: 17px;
   flex-direction: column;
   gap: 13px;
+}
+
+.data-location-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.data-location-current,
+.data-location-candidate {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-0);
+}
+
+.data-location-heading,
+.data-location-actions,
+.data-location-choice-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.data-location-heading > span {
+  display: flex;
+  align-items: center;
+  color: var(--text-main);
+  font-weight: 600;
+  gap: 7px;
+}
+
+.data-location-current > code,
+.data-location-candidate > code {
+  display: block;
+  margin: 10px 0;
+  padding: 9px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  color: var(--accent-color);
+  background: var(--surface-input);
+  font-size: var(--fs-7);
+}
+
+.data-location-details {
+  display: grid;
+  gap: 8px;
+}
+
+.data-location-details div {
+  display: grid;
+  gap: 4px;
+}
+
+.data-location-details span,
+.data-location-candidate > span {
+  color: var(--text-subtle);
+  font-size: var(--fs-7);
+}
+
+.data-location-details code {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: var(--fs-7);
+}
+
+.data-location-notice,
+.restart-notice,
+.data-key-note {
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: var(--surface-0);
+  font-size: var(--fs-8);
+  line-height: 1.55;
+}
+
+.restart-notice {
+  display: flex;
+  align-items: flex-start;
+  border-color: color-mix(in srgb, var(--accent-color) 28%, var(--line));
+  gap: 9px;
+}
+
+.restart-notice svg,
+.data-key-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent-color);
+}
+
+.restart-notice p {
+  margin: 3px 0 0;
+}
+
+.restart-notice code,
+.data-location-candidate code {
+  overflow-wrap: anywhere;
+}
+
+.data-location-actions > div {
+  display: grid;
+  gap: 4px;
+}
+
+.data-location-actions small,
+.data-location-candidate p {
+  color: var(--text-muted);
+  font-size: var(--fs-8);
+  line-height: 1.5;
+}
+
+.data-location-candidate p {
+  margin: 8px 0;
+}
+
+.data-location-choice-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.data-key-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .template-preview {

@@ -1,16 +1,18 @@
 use std::{
-    fs,
+    env, fs,
     net::IpAddr,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+mod data_location;
 
 use keyring::Entry;
 use reqwest::{StatusCode, Url};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
@@ -23,6 +25,15 @@ const MAX_EXTRACTED_TEXT_CHARS: usize = 60_000;
 
 struct AppState {
     db_path: PathBuf,
+}
+
+#[derive(Clone)]
+struct DataLocationState {
+    paths: data_location::DataPaths,
+    default_root: PathBuf,
+    install_dir: PathBuf,
+    config_path: PathBuf,
+    startup_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -812,6 +823,52 @@ fn get_saved_api_key(provider: &str) -> Option<String> {
         .ok()
         .and_then(|entry| entry.get_password().ok())
         .filter(|key| !key.trim().is_empty())
+}
+
+#[tauri::command]
+fn get_data_location(
+    location: State<'_, DataLocationState>,
+) -> Result<data_location::DataLocationStatus, String> {
+    data_location::read_status(
+        &location.config_path,
+        &location.paths,
+        &location.default_root,
+        location.startup_warning.clone(),
+    )
+}
+
+#[tauri::command]
+fn choose_data_root(
+    app: AppHandle,
+    location: State<'_, DataLocationState>,
+) -> Result<Option<data_location::DataRootInspection>, String> {
+    let selected = app.dialog().file().blocking_pick_folder();
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    let path = selected
+        .into_path()
+        .map_err(|error| format!("无法读取所选目录：{error}"))?;
+    data_location::inspect_target(
+        &path.to_string_lossy(),
+        &location.paths,
+        &location.install_dir,
+    )
+    .map(Some)
+}
+
+#[tauri::command]
+fn schedule_data_root_change(
+    input: data_location::DataRootChangeRequest,
+    location: State<'_, DataLocationState>,
+) -> Result<data_location::DataLocationStatus, String> {
+    data_location::schedule_change(
+        &location.config_path,
+        &location.paths,
+        &location.install_dir,
+        &location.default_root,
+        &input,
+    )
 }
 
 fn load_settings(state: &AppState) -> Result<AppSettings, String> {
@@ -3426,24 +3483,70 @@ fn export_history(app: AppHandle, state: State<'_, AppState>) -> Result<Option<S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
-            fs::create_dir_all(&data_dir).map_err(|error| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("无法创建应用数据目录：{error}"),
-                )
-            })?;
+            let legacy_data_dir = app.path().app_data_dir()?;
+            let legacy_webview_dir = app.path().app_local_data_dir()?;
+            let config_dir = app.path().app_config_dir()?;
+            let install_dir = env::current_exe()?
+                .parent()
+                .map(Path::to_path_buf)
+                .ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::Other, "无法解析 Prompt Forge 安装目录")
+                })?;
+            let preferred_root = preferred_data_root(&legacy_webview_dir);
+            let resolved = data_location::resolve_startup(
+                &data_location::AppPaths {
+                    config_dir: config_dir.clone(),
+                    legacy_data_dir,
+                    legacy_webview_dir,
+                    install_dir: install_dir.clone(),
+                    preferred_root: preferred_root.clone(),
+                },
+                env!("CARGO_PKG_VERSION"),
+            )
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+
             let state = AppState {
-                db_path: data_dir.join("prompt-forge.sqlite3"),
+                db_path: resolved.paths.database_path.clone(),
             };
             open_db(&state)
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             app.manage(state);
+            app.manage(DataLocationState {
+                paths: resolved.paths.clone(),
+                default_root: resolved.default_root,
+                install_dir,
+                config_path: data_location::config_path(&config_dir),
+                startup_warning: resolved.warning,
+            });
+
+            let window_config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|window| window.label == "main")
+                .cloned()
+                .ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "缺少 main 窗口配置")
+                })?;
+            WebviewWindowBuilder::from_config(app.handle(), &window_config)?
+                .data_directory(resolved.paths.webview_dir)
+                .build()?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_data_location,
+            choose_data_root,
+            schedule_data_root_change,
             get_settings,
             save_settings,
             clear_api_key,
@@ -3472,6 +3575,25 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Prompt Forge");
+}
+
+fn preferred_data_root(legacy_webview_dir: &Path) -> PathBuf {
+    if let Some(override_root) = env::var_os("PROMPT_FORGE_DATA_ROOT") {
+        let path = PathBuf::from(override_root);
+        if path.is_absolute() {
+            return path;
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    if Path::new("D:\\").exists() {
+        return PathBuf::from(r"D:\PromptForge-Data");
+    }
+
+    legacy_webview_dir
+        .parent()
+        .unwrap_or(legacy_webview_dir)
+        .join("PromptForge-Data")
 }
 
 #[cfg(test)]

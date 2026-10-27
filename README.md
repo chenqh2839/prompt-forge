@@ -4,10 +4,13 @@ Prompt Forge is a local-first desktop application for refining prompts through
 structured clarification. It is built with Tauri 2, React, TypeScript, Rust,
 and local SQLite.
 
-> Current source snapshot: **v0.10.1**
+> Current source snapshot: **v0.10.2**
 >
 > Distribution status: **Windows community preview**. macOS and Linux are not
 > yet verified on real hardware and do not have an official release binary.
+>
+> The latest published Windows binary remains **v0.10.1** until a v0.10.2
+> package has been rebuilt and validated.
 
 ## Repository layout
 
@@ -45,11 +48,11 @@ access, database migration, or uninstall behavior has been validated.
 
 ## Installation
 
-Download the latest Windows archive from
+Download the latest published Windows archive from
 [GitHub Releases](https://github.com/chenqh2839/prompt-forge/releases).
 
-1. Extract `PromptForge-0.10.1-Windows-x64.zip`.
-2. To install, run `安装版\Prompt Forge_0.10.1_x64-setup.exe`.
+1. Extract the Windows ZIP attached to the latest available Release.
+2. To install, run the versioned NSIS setup executable in `安装版`.
 3. To use the portable build, keep `Prompt Forge.exe` and
    `WebView2Loader.dll` in the same directory.
 
@@ -111,6 +114,13 @@ sent to the model endpoint selected by the user.
   exported files as potentially sensitive.
 
 The source does not include the owner's local database or exported credentials.
+
+Starting with v0.10.2, database and WebView data can be stored under a
+user-selected data root. On first start, Prompt Forge migrates legacy data,
+verifies every copied file with SHA-256, and only then removes the migrated
+source files. The path can be changed under
+`Settings → 数据位置`; the change takes effect after restarting the application.
+See [`source/docs/DATA_LOCATION.md`](source/docs/DATA_LOCATION.md).
 
 ## Security
 

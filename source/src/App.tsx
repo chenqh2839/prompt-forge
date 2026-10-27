@@ -396,6 +396,17 @@ export default function App() {
       });
   }, []);
 
+  useEffect(() => {
+    void bridge
+      .getDataLocation()
+      .then((location) => {
+        if (location.warning) showToast(location.warning);
+      })
+      .catch((locationError) => {
+        setError(`数据目录状态检查失败：${readableError(locationError)}`);
+      });
+  }, [showToast]);
+
   const persistCompletedPrompt = useCallback(
     async (
       prompt: string,

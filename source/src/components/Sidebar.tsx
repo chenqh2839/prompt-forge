@@ -397,7 +397,7 @@ export function Sidebar({
 
       <div className="sidebar-foot">
         <span>PF / LOCAL STUDIO</span>
-        <span>v0.10.1</span>
+        <span>v0.10.2</span>
       </div>
     </aside>
   );

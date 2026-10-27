@@ -1,6 +1,6 @@
 [package]
 name = "prompt-forge"
-version = "0.10.1"
+version = "0.10.2"
 description = "A local-first prompt refinement desktop application"
 authors = ["Prompt Forge"]
 license = "Apache-2.0"
@@ -16,8 +16,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 uuid = { version = "1", features = ["v4"] }

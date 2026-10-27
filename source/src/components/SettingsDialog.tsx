@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   CheckCircle2,
+  Database,
   Eye,
   EyeOff,
+  FolderOpen,
+  HardDrive,
   KeyRound,
   LoaderCircle,
   Paintbrush,
@@ -16,7 +19,14 @@ import {
   X,
 } from "lucide-react";
 import { bridge } from "../lib/bridge";
-import type { AppSettings, ProviderId, SettingsInput } from "../types";
+import type {
+  AppSettings,
+  DataLocationStatus,
+  DataRootChangeMode,
+  DataRootInspection,
+  ProviderId,
+  SettingsInput,
+} from "../types";
 import {
   DEFAULT_THEME,
   DARK_THEME,
@@ -84,7 +94,9 @@ export function SettingsDialog({
     saveTheme,
     clearPreview,
   } = useTheme();
-  const [activeTab, setActiveTab] = useState<"model" | "appearance">("model");
+  const [activeTab, setActiveTab] = useState<
+    "model" | "storage" | "appearance"
+  >("model");
   const [draft, setDraft] = useState<SettingsInput>({
     provider: settings.provider,
     baseUrl: settings.baseUrl,
@@ -98,6 +110,11 @@ export function SettingsDialog({
   const [error, setError] = useState("");
   const [appearanceDraft, setAppearanceDraft] =
     useState<ThemeSettings>(theme);
+  const [dataLocation, setDataLocation] =
+    useState<DataLocationStatus | null>(null);
+  const [dataCandidate, setDataCandidate] =
+    useState<DataRootInspection | null>(null);
+  const [dataBusy, setDataBusy] = useState(false);
 
   const closeDialog = () => {
     clearPreview();
@@ -114,6 +131,31 @@ export function SettingsDialog({
       clearPreview();
     };
   }, [clearPreview, onClose]);
+
+  useEffect(() => {
+    if (activeTab !== "storage") return;
+    let cancelled = false;
+    setDataBusy(true);
+    bridge
+      .getDataLocation()
+      .then((status) => {
+        if (!cancelled) {
+          setDataLocation(status);
+          setError("");
+        }
+      })
+      .catch((locationError) => {
+        if (!cancelled) {
+          setError(`读取数据位置失败：${errorText(locationError)}`);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDataBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   const selectProvider = (provider: (typeof providers)[number]) => {
     setDraft({
@@ -180,10 +222,56 @@ export function SettingsDialog({
   const keyAlreadySaved =
     settings.hasApiKey && settings.provider === draft.provider;
 
-  const switchTab = (tab: "model" | "appearance") => {
+  const switchTab = (tab: "model" | "storage" | "appearance") => {
     setActiveTab(tab);
+    setDataCandidate(null);
     setMessage("");
     setError("");
+  };
+
+  const handleChooseDataRoot = async () => {
+    setDataBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const selected = await bridge.chooseDataRoot();
+      if (selected) {
+        setDataCandidate(selected);
+        if (selected.hasForeignEntries) {
+          setError(
+            "所选目录包含非 Prompt Forge 文件，请选择一个专用空目录。",
+          );
+        } else if (selected.hasManagedData && !selected.hasExistingData) {
+          setError(
+            "所选目录包含不完整的 Prompt Forge 数据，暂不能使用。",
+          );
+        }
+      }
+    } catch (selectionError) {
+      setError(`选择数据目录失败：${errorText(selectionError)}`);
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
+  const handleScheduleDataRoot = async (mode: DataRootChangeMode) => {
+    if (!dataCandidate) return;
+    setDataBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const status = await bridge.scheduleDataRootChange({
+        targetRoot: dataCandidate.targetRoot,
+        mode,
+      });
+      setDataLocation(status);
+      setDataCandidate(null);
+      setMessage("数据位置已记录，重启应用后生效。");
+    } catch (changeError) {
+      setError(`更改数据目录失败：${errorText(changeError)}`);
+    } finally {
+      setDataBusy(false);
+    }
   };
 
   const updateAppearance = (
@@ -285,6 +373,13 @@ export function SettingsDialog({
             模型连接
           </button>
           <button
+            className={activeTab === "storage" ? "active" : ""}
+            onClick={() => switchTab("storage")}
+          >
+            <HardDrive size={14} />
+            数据位置
+          </button>
+          <button
             className={activeTab === "appearance" ? "active" : ""}
             onClick={() => switchTab("appearance")}
           >
@@ -377,6 +472,122 @@ export function SettingsDialog({
           </label>
         </div>
           </>
+        ) : activeTab === "storage" ? (
+          <div className="data-location-panel">
+            <div className="data-location-current">
+              <div className="data-location-heading">
+                <span>
+                  <Database size={15} />
+                  当前数据位置
+                </span>
+                {dataBusy && <LoaderCircle className="spin" size={14} />}
+              </div>
+              <code>{dataLocation?.currentRoot ?? "正在读取数据位置…"}</code>
+              <div className="data-location-details">
+                <div>
+                  <span>SQLite 数据库</span>
+                  <code>{dataLocation?.databasePath ?? "—"}</code>
+                </div>
+                <div>
+                  <span>WebView 配置</span>
+                  <code>{dataLocation?.webviewPath ?? "—"}</code>
+                </div>
+              </div>
+            </div>
+
+            {dataLocation?.warning && (
+              <div className="data-location-notice">
+                {dataLocation.warning}
+              </div>
+            )}
+
+            {dataLocation?.restartRequired && (
+              <div className="restart-notice">
+                <HardDrive size={15} />
+                <div>
+                  <strong>重启应用后生效</strong>
+                  <p>
+                    已记录新位置{" "}
+                    <code>{dataLocation.pendingRoot}</code>，下次启动时才会切换
+                    数据库和 WebView 数据目录。
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="data-location-actions">
+              <div>
+                <strong>更改存储目录</strong>
+                <small>
+                  API Key 始终保留在系统凭据库，不会随文件迁移。
+                </small>
+              </div>
+              <button
+                className="secondary-button"
+                onClick={handleChooseDataRoot}
+                disabled={dataBusy}
+              >
+                <FolderOpen size={14} />
+                更改…
+              </button>
+            </div>
+
+            {dataCandidate && (
+              <div className="data-location-candidate">
+                <span>目标目录</span>
+                <code>{dataCandidate.targetRoot}</code>
+                <p>
+                  {dataCandidate.hasExistingData
+                    ? "该目录已有可用的 Prompt Forge 数据，可选择直接使用。"
+                    : dataCandidate.hasManagedData
+                      ? "该目录包含不完整或不可识别的数据，暂不能切换。"
+                      : "该目录没有现成数据，可迁移当前数据后使用。"}
+                </p>
+                <p>
+                  迁移操作会复制 SQLite、WAL/SHM、WebView
+                  配置并在校验成功后删除旧数据；失败时保留原目录。
+                </p>
+                <div className="data-location-choice-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => handleScheduleDataRoot("existing")}
+                    disabled={
+                      dataBusy ||
+                      !dataCandidate.hasExistingData ||
+                      dataCandidate.hasForeignEntries
+                    }
+                  >
+                    使用现有数据
+                  </button>
+                  <button
+                    className="primary-button"
+                    onClick={() => handleScheduleDataRoot("migrate")}
+                    disabled={
+                      dataBusy ||
+                      dataCandidate.hasExistingData ||
+                      dataCandidate.hasManagedData ||
+                      dataCandidate.hasForeignEntries
+                    }
+                  >
+                    {dataBusy && <LoaderCircle className="spin" size={14} />}
+                    迁移当前数据
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setDataCandidate(null)}
+                    disabled={dataBusy}
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="data-key-note">
+              <ShieldCheck size={14} />
+              卸载应用不会自动删除数据；重新安装后可在本页重新指定目录或使用现有数据。
+            </div>
+          </div>
         ) : (
           <div className="appearance-panel">
             <div className="theme-mode-tabs" aria-label="主题模式">
@@ -570,6 +781,15 @@ export function SettingsDialog({
               TOKEN NOTICE：多轮追问与重新生成都会消耗模型 Token，费用由所选服务商结算。
             </div>
           </>
+        ) : activeTab === "storage" ? (
+          <div className="modal-foot">
+            <span className="restart-hint">
+              数据位置变更将在下次启动时应用
+            </span>
+            <button className="secondary-button" onClick={closeDialog}>
+              关闭
+            </button>
+          </div>
         ) : (
           <div className="modal-foot">
             <button className="danger-text" onClick={resetAppearance}>

@@ -2,6 +2,8 @@
 
 Prompt Forge 是一个本地优先的提示词优化桌面应用。它先识别原始提示中的信息缺口，通过 1–5 个可解释的问题进行多轮澄清，再生成包含角色、任务、背景、约束、输出格式与质量检查的专业提示词。
 
+当前源码版本：`0.10.2`。
+
 ## 已实现
 
 - Windows 优先、Tauri 2 跨平台应用
@@ -58,7 +60,8 @@ pnpm desktop:build
 
 产物位于 `src-tauri/target/release/bundle/nsis/`。
 
-Windows x64 发布压缩包名为 `PromptForge-0.10.1-Windows-x64.zip`，包含：
+Windows x64 发布压缩包建议命名为
+`PromptForge-0.10.2-Windows-x64.zip`，包含：
 
 - 双击安装的 NSIS 安装程序
 - 包含 WebView2Loader 的便携版
@@ -170,13 +173,17 @@ AI 会先补齐角色、沟通对象、任务背景、语气和输出格式，�
 
 ## 数据位置
 
-SQLite 数据库位于 Tauri 应用数据目录：
+v0.10.2 起支持在设置中自定义数据根目录。默认托管布局为：
 
 ```text
-<app-data-dir>/com.promptforge.desktop/prompt-forge.sqlite3
+<data-root>/data/prompt-forge.sqlite3
+<data-root>/webview/
+<data-root>/meta/
 ```
 
-具体位置由操作系统决定。使用历史记录面板中的“导出”将全部记录保存为 JSON；“删除”和“清空”只影响本机数据。
+首次升级时会迁移旧 SQLite、WAL/SHM 和 WebView 数据，逐文件校验后才会清理源文件。完整规则见 [DATA_LOCATION.md](docs/DATA_LOCATION.md)。
+
+路径配置独立保存在系统配置目录的 `storage-location.json` 中，不随数据目录迁移。使用历史记录面板中的“导出”将全部记录保存为 JSON；“删除”和“清空”只影响本机数据。
 
 ## 项目文档
 

@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AnalyzeRequest,
   AppSettings,
+  DataLocationStatus,
+  DataRootChangeRequest,
+  DataRootInspection,
   DistillTemplateInput,
   HistoryDraft,
   HistoryItem,
@@ -22,6 +25,11 @@ import type {
 } from "../types";
 
 export const bridge = {
+  getDataLocation: () => invoke<DataLocationStatus>("get_data_location"),
+  chooseDataRoot: () =>
+    invoke<DataRootInspection | null>("choose_data_root"),
+  scheduleDataRootChange: (input: DataRootChangeRequest) =>
+    invoke<DataLocationStatus>("schedule_data_root_change", { input }),
   getSettings: () => invoke<AppSettings>("get_settings"),
   saveSettings: (input: SettingsInput) =>
     invoke<AppSettings>("save_settings", { input }),

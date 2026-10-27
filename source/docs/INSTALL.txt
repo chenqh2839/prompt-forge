@@ -1,9 +1,9 @@
-Prompt Forge 0.10.1 — Windows x64
+Prompt Forge 0.10.2 — Windows x64
 ================================
 
 安装版（推荐）
 --------------
-双击“Prompt Forge_0.10.1_x64-setup.exe”，按向导完成安装。
+双击“Prompt Forge_0.10.2_x64-setup.exe”，按向导完成安装。
 安装范围为当前用户，通常不需要管理员权限。
 
 便携版
