@@ -104,10 +104,10 @@ sent to the model endpoint selected by the user.
 
 - Windows Credential Manager, macOS Keychain, or Linux Secret Service stores
   API keys.
-- SQLite data is stored at
-  `%APPDATA%\com.promptforge.desktop\prompt-forge.sqlite3` on Windows.
-- WebView theme and local configuration are stored under
-  `%LOCALAPPDATA%\com.promptforge.desktop`.
+- SQLite data is stored at `<data-root>\data\prompt-forge.sqlite3`.
+- WebView theme and local configuration are stored at `<data-root>\webview`.
+- The migration configuration is kept separately in the operating system's
+  application configuration directory as `storage-location.json`.
 - Uninstalling the application does not automatically remove SQLite data,
   WebView settings, or saved credentials.
 - History exports can contain prompts, project context, and attachments. Treat

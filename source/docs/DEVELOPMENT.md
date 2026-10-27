@@ -118,7 +118,8 @@ Claude 原生 API 的请求结构与 OpenAI Chat Completions 不同。本应用�
 
 - Keyring service：`com.promptforge.desktop`
 - Keyring account：`api-key:<provider>`
-- SQLite 文件：`prompt-forge.sqlite3`
+- 数据根目录由 `storage-location.json` 配置；托管布局为 `<data-root>/data/prompt-forge.sqlite3`、`<data-root>/webview` 和 `<data-root>/meta`。
+- 旧版 Windows 位置仅用于首次迁移来源：`%APPDATA%\com.promptforge.desktop\prompt-forge.sqlite3` 与 `%LOCALAPPDATA%\com.promptforge.desktop`
 
 卸载应用不会自动删除系统凭据或应用数据。如需彻底清除，可在应用内删除 Key、清空历史，再手动删除应用数据目录。
 

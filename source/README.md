@@ -212,8 +212,9 @@ docs/                   PRD、架构和开发指引
 ## 隐私与数据
 
 - API Key 应保存于 Windows 凭据管理器、macOS Keychain 或 Linux Secret Service。
-- Windows SQLite 数据库位于 `%APPDATA%\com.promptforge.desktop\prompt-forge.sqlite3`。
-- Windows WebView 主题与本地配置位于 `%LOCALAPPDATA%\com.promptforge.desktop`。
+- SQLite 数据库位于 `<data-root>/data/prompt-forge.sqlite3`。
+- WebView 主题与本地配置位于 `<data-root>/webview`。
+- 数据位置引导配置独立保存在系统应用配置目录的 `storage-location.json`，不随数据目录迁移。
 - 卸载应用不会自动删除数据库、主题配置或系统凭据。
 - 模型调用时，用户选择的内容会发送至用户配置的模型服务 endpoint；Token 费用由用户承担。
 
