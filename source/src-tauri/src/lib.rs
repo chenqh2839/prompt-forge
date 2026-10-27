@@ -3933,7 +3933,7 @@ mod tests {
         assert!(validate_variable_workflow(&valid).is_ok());
 
         let invalid = VariableWorkflowInput {
-            skeleton: "只包含 {{audience}}，缺少另一个变量。".to_string(),
+            skeleton: "这里引用了未定义的 {{undefined_key}} 变量。".to_string(),
             ..valid
         };
         assert!(validate_variable_workflow(&invalid).is_err());
