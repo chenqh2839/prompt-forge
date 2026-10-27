@@ -25,6 +25,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 - The WebView data directory is configured before the main window is created.
 - Manual background and project context are merged and deduplicated before
   prompt generation. Context beyond the safety limit is truncated.
+- Migration handles Windows EFS sources and encrypted bootstrap configuration
+  directories, and refuses to activate a completed target while the source is
+  still present and may have changed.
 
 ### Security
 
