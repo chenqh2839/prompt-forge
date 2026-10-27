@@ -64,7 +64,7 @@ try {
         $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $relative"
     }
-    Set-Content -LiteralPath (Join-Path $stagingPackage 'SHA256SUMS.txt') -Value $checksumLines -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $stagingPackage 'SHA256SUMS.txt') -Value $checksumLines -Encoding utf8NoBOM
 
     if (Test-Path -LiteralPath $archivePath) {
         Remove-Item -LiteralPath $archivePath -Force
