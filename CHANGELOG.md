@@ -15,12 +15,16 @@ The project follows [Semantic Versioning](https://semver.org/).
 - One-time migration from legacy Windows AppData/LocalAppData locations.
 - Migration markers, SHA-256 file verification, and SQLite quick checks.
 - Single-instance enforcement to prevent concurrent access during migration.
+- Optional reuse of matching project/manual background for role selection.
+- A separate one-line role decision explanation in the final result panel.
 
 ### Changed
 
 - SQLite, WAL/SHM, and WebView data now share a managed
   `data`, `webview`, and `meta` directory layout.
 - The WebView data directory is configured before the main window is created.
+- Manual background and project context are merged and deduplicated before
+  prompt generation. Context beyond the safety limit is truncated.
 
 ### Security
 

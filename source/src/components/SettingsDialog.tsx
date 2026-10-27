@@ -102,6 +102,7 @@ export function SettingsDialog({
     baseUrl: settings.baseUrl,
     model: settings.model,
     apiKey: "",
+    reuseProjectRole: settings.reuseProjectRole,
   });
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -163,6 +164,7 @@ export function SettingsDialog({
       baseUrl: provider.endpoint,
       model: provider.model,
       apiKey: "",
+      reuseProjectRole: draft.reuseProjectRole,
     });
     setMessage("");
     setError("");
@@ -468,6 +470,27 @@ export function SettingsDialog({
             <small>
               Ollama 等本地服务通常无需 Key。密钥保存在 Windows
               凭据管理器、macOS 钥匙串或 Linux Secret Service。
+            </small>
+          </label>
+
+          <label className="preference-switch">
+            <span>
+              <ShieldCheck size={14} />
+              复用项目背景中的角色
+            </span>
+            <input
+              type="checkbox"
+              checked={draft.reuseProjectRole}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  reuseProjectRole: event.target.checked,
+                })
+              }
+            />
+            <small>
+              默认开启。背景已明确角色、专业领域或技术栈时，模型会判断是否跳过重复的角色声明，
+              并单独显示一行判断理由。关闭后恢复为每次生成角色设定。
             </small>
           </label>
         </div>

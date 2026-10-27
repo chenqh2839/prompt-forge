@@ -45,6 +45,7 @@ export interface ClarificationTurn {
 export interface PromptAnalysis {
   action: "clarify" | "complete";
   rationale: string;
+  roleDecision?: string;
   questions: ClarificationQuestion[];
   optimizedPrompt?: string;
   tokensUsed?: number;
@@ -55,6 +56,7 @@ export interface AppSettings {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
+  reuseProjectRole: boolean;
 }
 
 export interface SettingsInput {
@@ -62,6 +64,7 @@ export interface SettingsInput {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  reuseProjectRole: boolean;
 }
 
 export type DataRootChangeMode = "existing" | "migrate";
@@ -319,6 +322,7 @@ export interface PromptVariant {
   values: Record<string, string>;
   sourcePrompt: string;
   optimizedPrompt: string;
+  roleDecision?: string;
   tokensUsed?: number;
   historyId?: string;
 }

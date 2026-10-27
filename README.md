@@ -24,6 +24,8 @@ The application README is available at
 ## Features
 
 - Iterative prompt clarification with explainable questions.
+- Reuse of matching project roles and technical context without repeating a
+  standalone role declaration; this can be disabled in Settings.
 - Prompt refinement, regeneration, and revision workflows.
 - Project context, selected history summaries, and context-budget handling.
 - Project interactions can be converted into reusable prompt templates.

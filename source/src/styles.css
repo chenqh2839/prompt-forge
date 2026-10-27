@@ -2070,6 +2070,31 @@ button:disabled {
   line-height: 1.55;
 }
 
+.role-decision {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  margin-bottom: 12px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-color) 3%, var(--surface-0));
+  gap: 5px;
+}
+
+.role-decision span {
+  color: var(--accent-color);
+  font-family: var(--mono);
+  font-size: var(--fs-7);
+  letter-spacing: 0.08em;
+}
+
+.role-decision p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-8);
+  line-height: 1.55;
+}
+
 .question-list {
   display: flex;
   flex-direction: column;
@@ -2785,6 +2810,33 @@ button:disabled {
   margin-top: 17px;
   flex-direction: column;
   gap: 13px;
+}
+
+.settings-form .preference-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-0);
+  gap: 5px 12px;
+}
+
+.settings-form .preference-switch > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.settings-form .preference-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-color);
+}
+
+.settings-form .preference-switch small {
+  grid-column: 1 / -1;
 }
 
 .data-location-panel {

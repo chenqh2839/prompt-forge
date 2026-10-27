@@ -73,6 +73,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   baseUrl: "https://api.openai.com/v1",
   model: "gpt-4.1-mini",
   hasApiKey: false,
+  reuseProjectRole: true,
 };
 
 const KEEP_ATTACHMENTS_STORAGE_KEY = "prompt-forge-keep-attachments-v1";
@@ -175,6 +176,7 @@ export default function App() {
   >([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [rationale, setRationale] = useState("");
+  const [roleDecision, setRoleDecision] = useState("");
   const [optimizedPrompt, setOptimizedPrompt] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState("");
@@ -524,6 +526,7 @@ export default function App() {
         });
 
         setRationale(result.rationale);
+        setRoleDecision(result.roleDecision ?? "");
         if (result.action === "complete" && result.optimizedPrompt) {
           await handleComplete(
             result.optimizedPrompt,
@@ -582,6 +585,7 @@ export default function App() {
     setCurrentQuestions([]);
     setOptimizedPrompt("");
     setRationale("");
+    setRoleDecision("");
     setTokensUsed(0);
     setActiveHistoryId(null);
     setLastReadAttachmentNames([]);
@@ -628,6 +632,7 @@ export default function App() {
     setVariants([]);
     setActiveVariantId(null);
     setRationale("");
+    setRoleDecision("");
     setCurrentQuestions([]);
     setRounds([]);
     setTokensUsed(0);
@@ -689,6 +694,7 @@ export default function App() {
           values: item.values,
           sourcePrompt: item.sourcePrompt,
           optimizedPrompt: result.optimizedPrompt,
+          roleDecision: result.roleDecision,
           tokensUsed: result.tokensUsed,
           historyId: saved.id,
         });
@@ -696,6 +702,7 @@ export default function App() {
         setVariants([...completed]);
         setActiveVariantId(completed[0].id);
         setOptimizedPrompt(completed[0].optimizedPrompt);
+        setRoleDecision(completed[0].roleDecision ?? "");
       }
       setRationale(
         `变量流程“${workflow.name}”已生成 ${completed.length} 个实例。`,
@@ -878,6 +885,7 @@ export default function App() {
       }
       setLastSourceHistoryIds(sourceHistoryIdsToSave);
       setRationale(result.rationale);
+      setRoleDecision(result.roleDecision ?? "");
       setTokensUsed((current) => current + (result.tokensUsed ?? 0));
       setRevisionCount((current) => current + 1);
       setStage("complete");
@@ -946,6 +954,7 @@ export default function App() {
     setCurrentQuestions([]);
     setAnswers({});
     setRationale("");
+    setRoleDecision("");
     setOptimizedPrompt("");
     setStage("idle");
     setError("");
@@ -986,6 +995,7 @@ export default function App() {
     setCurrentQuestions([]);
     setAnswers({});
     setRationale("已从本地历史记录恢复。");
+    setRoleDecision("");
     setOptimizedPrompt(item.optimizedPrompt);
     setStage("complete");
     setError("");
@@ -1084,6 +1094,7 @@ export default function App() {
   const handleSelectVariant = (variant: PromptVariant) => {
     setActiveVariantId(variant.id);
     setOptimizedPrompt(variant.optimizedPrompt);
+    setRoleDecision(variant.roleDecision ?? "");
     setRevisionCount(0);
   };
 
@@ -1454,6 +1465,7 @@ export default function App() {
             batchProgress={batchProgress}
             attachmentNames={lastReadAttachmentNames}
             sourceHistoryIds={lastSourceHistoryIds}
+            roleDecision={roleDecision}
               />
             </>
           )}

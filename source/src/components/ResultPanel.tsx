@@ -28,6 +28,7 @@ interface ResultPanelProps {
   batchProgress: { current: number; total: number } | null;
   attachmentNames: string[];
   sourceHistoryIds: string[];
+  roleDecision: string;
 }
 
 export function ResultPanel({
@@ -46,6 +47,7 @@ export function ResultPanel({
   batchProgress,
   attachmentNames,
   sourceHistoryIds,
+  roleDecision,
 }: ResultPanelProps) {
   const [feedback, setFeedback] = useState("");
   const [revising, setRevising] = useState(false);
@@ -74,6 +76,13 @@ export function ResultPanel({
           {prompt ? "READY" : "WAITING"}
         </span>
       </div>
+
+      {roleDecision && (
+        <div className="role-decision" role="status">
+          <span>角色判断</span>
+          <p>{roleDecision}</p>
+        </div>
+      )}
 
       {variants.length > 1 && (
         <div className="variant-tabs" aria-label="变量实例">
