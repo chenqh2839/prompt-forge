@@ -76,7 +76,6 @@ pub struct AppPaths {
 #[derive(Clone, Debug)]
 pub struct StartupResult {
     pub paths: DataPaths,
-    pub configured_root: Option<PathBuf>,
     pub default_root: PathBuf,
     pub warning: Option<String>,
 }
@@ -234,10 +233,8 @@ pub fn resolve_startup(app: &AppPaths, version: &str) -> Result<StartupResult, S
     if let Some(active_root) = config.active_root.as_deref() {
         match use_configured_root(app, active_root, &current) {
             Ok(paths) => {
-                let configured = PathBuf::from(active_root);
                 return Ok(StartupResult {
                     paths,
-                    configured_root: Some(configured),
                     default_root: app.preferred_root.clone(),
                     warning: current_warning,
                 });
@@ -286,9 +283,6 @@ pub fn resolve_startup(app: &AppPaths, version: &str) -> Result<StartupResult, S
             }
             Ok(StartupResult {
                 paths,
-                configured_root: Some(PathBuf::from(
-                    config.active_root.clone().unwrap_or_default(),
-                )),
                 default_root: app.preferred_root.clone(),
                 warning: combine_warning(
                     current_warning,
@@ -433,7 +427,6 @@ fn apply_pending_change(
             write_config(config_path, config)?;
             Ok(StartupResult {
                 paths: target_paths,
-                configured_root: Some(target),
                 default_root: app.preferred_root.clone(),
                 warning: Some("已切换到目标目录中的现有数据。".to_string()),
             })
@@ -468,7 +461,6 @@ fn apply_pending_change(
             }
             Ok(StartupResult {
                 paths: target_paths,
-                configured_root: Some(target),
                 default_root: app.preferred_root.clone(),
                 warning: combine_warning(notice, cleanup_warning),
             })
@@ -568,7 +560,6 @@ fn fallback_result(
 ) -> StartupResult {
     StartupResult {
         paths: current.clone(),
-        configured_root: None,
         default_root: preferred_root.to_path_buf(),
         warning,
     }
