@@ -1207,6 +1207,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
         .map_err(|error| format!("写入临时配置文件失败：{error}"))?;
     file.sync_all()
         .map_err(|error| format!("同步临时配置文件失败：{error}"))?;
+    drop(file);
 
     if path.exists() {
         let mut source =
@@ -1222,9 +1223,20 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
         target
             .sync_all()
             .map_err(|error| format!("同步配置备份失败：{error}"))?;
-        fs::remove_file(path).map_err(|error| format!("替换配置文件失败：{error}"))?;
+        drop(source);
+        drop(target);
+        if let Err(remove_error) = fs::remove_file(path) {
+            let _ = fs::remove_file(&temp);
+            return write_bytes_in_place(path, &bytes).map_err(|write_error| {
+                format!("替换配置文件失败（{remove_error}），原位写入也失败：{write_error}")
+            });
+        }
     }
-    fs::rename(&temp, path).map_err(|error| format!("提交配置文件失败：{error}"))?;
+    if let Err(rename_error) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        return write_bytes_in_place(path, &bytes)
+            .map_err(|error| format!("提交配置失败（{rename_error}），恢复写入也失败：{error}"));
+    }
     let _ = fs::remove_file(backup);
     Ok(())
 }
@@ -1232,6 +1244,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
 fn write_bytes_in_place(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mut file = OpenOptions::new()
         .write(true)
+        .create(true)
         .truncate(true)
         .open(path)
         .map_err(|error| format!("打开原配置文件失败：{error}"))?;
@@ -1420,6 +1433,7 @@ mod tests {
         migrate_data(&source, &target, "0.10.2").unwrap();
 
         let config_path = config_path(&config_dir);
+        let saved_config_dir = config_dir.clone();
         write_config(
             &config_path,
             &StorageConfig {
@@ -1460,6 +1474,13 @@ mod tests {
             path_key(&normalize_for_compare(&target).unwrap())
         );
         assert!(saved.pending_change.is_none());
+        assert!(!fs::read_dir(&saved_config_dir)
+            .unwrap()
+            .flatten()
+            .any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("storage-location.json.tmp-")));
         let _ = fs::remove_dir_all(root);
     }
 
