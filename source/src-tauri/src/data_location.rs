@@ -62,13 +62,6 @@ impl DataPaths {
         }
         Ok(())
     }
-
-    pub fn database_sidecars(&self) -> [PathBuf; 2] {
-        [
-            self.database_path.with_extension("sqlite3-wal"),
-            self.database_path.with_extension("sqlite3-shm"),
-        ]
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -250,7 +243,10 @@ pub fn resolve_startup(app: &AppPaths, version: &str) -> Result<StartupResult, S
                 });
             }
             Err(error) => {
-                current_warning = Some(format!("配置的数据目录不可用，已回退到原目录：{error}"));
+                current_warning = combine_warning(
+                    current_warning,
+                    Some(format!("配置的数据目录不可用，已回退到原目录：{error}")),
+                );
             }
         }
     }
@@ -321,7 +317,7 @@ pub fn read_status(
     let pending = config.pending_change.as_ref();
     Ok(DataLocationStatus {
         current_root: current.root.to_string_lossy().to_string(),
-        configured_root: config.active_root,
+        configured_root: config.active_root.clone(),
         default_root: default_root.to_string_lossy().to_string(),
         database_path: current.database_path.to_string_lossy().to_string(),
         webview_path: current.webview_dir.to_string_lossy().to_string(),
@@ -447,8 +443,7 @@ fn apply_pending_change(
             if inspection.has_managed_data
                 && !source
                     .as_ref()
-                    .map(|source| can_resume_migration(&target, source))
-                    .unwrap_or(false)
+                    .is_some_and(|source| can_resume_migration(&target, source))
             {
                 return Err("目标目录已有 Prompt Forge 数据，不能静默覆盖。".to_string());
             }
@@ -506,9 +501,7 @@ fn initialize_default_root(
         return Ok((target_paths, None));
     }
     if inspection.has_managed_data
-        && !source
-            .map(|source| can_resume_migration(&target, source))
-            .unwrap_or(false)
+        && !source.is_some_and(|source| can_resume_migration(&target, source))
     {
         return Err("目标目录已有不完整数据或非 Prompt Forge 文件。".to_string());
     }
@@ -803,10 +796,7 @@ fn validate_target_root(
         return Err("所选数据路径不是目录。".to_string());
     }
 
-    fs::create_dir_all(&path)
-        .map_err(|error| format!("无法创建数据目录 {}：{error}", path.display()))?;
-    let canonical = fs::canonicalize(&path)
-        .map_err(|error| format!("无法解析数据目录 {}：{error}", path.display()))?;
+    let canonical = normalize_for_compare(&path)?;
     let current_root = normalize_for_compare(&current.root)?;
     let install_root = normalize_for_compare(install_dir)?;
 
@@ -823,6 +813,10 @@ fn validate_target_root(
         return Err("不能将数据目录设置在系统关键目录或磁盘根目录。".to_string());
     }
 
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("无法创建数据目录 {}：{error}", path.display()))?;
+    let canonical = fs::canonicalize(&path)
+        .map_err(|error| format!("无法解析数据目录 {}：{error}", path.display()))?;
     let probe = path.join(format!(".prompt-forge-write-test-{}", Uuid::new_v4()));
     let mut file = OpenOptions::new()
         .write(true)
