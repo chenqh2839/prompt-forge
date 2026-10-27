@@ -436,6 +436,26 @@ fn apply_pending_change(
         }
         DataRootChangeMode::Migrate => {
             let source = source_from_paths(current)?;
+            if inspection.has_managed_data && migration_is_complete(&target, &current.root) {
+                target_paths.ensure_directories()?;
+                config.active_root = Some(target.to_string_lossy().to_string());
+                config.pending_change = None;
+                config.last_error = None;
+                config.updated_at = now_timestamp();
+                write_config(config_path, config)?;
+                let cleanup_warning = source.as_ref().and_then(remove_source_data);
+                if cleanup_warning.is_none() && source.is_some() {
+                    mark_source_removed(&target_paths.root, true);
+                }
+                return Ok(StartupResult {
+                    paths: target_paths,
+                    default_root: app.preferred_root.clone(),
+                    warning: combine_warning(
+                        Some("已确认目标目录中的完整迁移结果，并完成数据位置切换。".to_string()),
+                        cleanup_warning,
+                    ),
+                });
+            }
             if inspection.has_managed_data
                 && !source
                     .as_ref()
@@ -702,6 +722,28 @@ fn can_resume_migration(target_root: &Path, source: &MigrationSource) -> bool {
     marker.status == "in_progress"
         && marker.target == target_root.to_string_lossy()
         && marker.source == source.label.to_string_lossy()
+}
+
+fn migration_is_complete(target_root: &Path, source_root: &Path) -> bool {
+    let marker_path = DataPaths::managed(target_root.to_path_buf())
+        .meta_dir
+        .join(MIGRATION_MARKER);
+    let Ok(bytes) = fs::read(marker_path) else {
+        return false;
+    };
+    let Ok(marker) = serde_json::from_slice::<MigrationMarker>(&bytes) else {
+        return false;
+    };
+    if marker.status != "complete" {
+        return false;
+    }
+    let target_matches = normalize_for_compare(Path::new(&marker.target))
+        .map(|path| path_key(&path) == path_key(target_root))
+        .unwrap_or(false);
+    let source_matches = normalize_for_compare(Path::new(&marker.source))
+        .map(|path| path_key(&path) == path_key(source_root))
+        .unwrap_or(false);
+    target_matches && source_matches
 }
 
 fn mark_source_removed(target_root: &Path, source_removed: bool) {
@@ -1140,11 +1182,21 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
     let backup = backup_path(path);
     let bytes =
         serde_json::to_vec_pretty(value).map_err(|error| format!("序列化配置失败：{error}"))?;
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)
-        .map_err(|error| format!("创建临时配置文件失败：{error}"))?;
+    let mut file = match OpenOptions::new().write(true).create_new(true).open(&temp) {
+        Ok(file) => file,
+        Err(open_error) if path.is_file() => {
+            let original =
+                fs::read(path).map_err(|error| format!("读取原配置文件失败：{error}"))?;
+            let result = write_bytes_in_place(path, &bytes);
+            if result.is_err() {
+                let _ = write_bytes_in_place(path, &original);
+            }
+            return result.map_err(|error| {
+                format!("无法创建临时配置文件（{open_error}），原位写入也失败：{error}")
+            });
+        }
+        Err(error) => return Err(format!("创建临时配置文件失败：{error}")),
+    };
     file.write_all(&bytes)
         .map_err(|error| format!("写入临时配置文件失败：{error}"))?;
     file.sync_all()
@@ -1169,6 +1221,18 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
     fs::rename(&temp, path).map_err(|error| format!("提交配置文件失败：{error}"))?;
     let _ = fs::remove_file(backup);
     Ok(())
+}
+
+fn write_bytes_in_place(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|error| format!("打开原配置文件失败：{error}"))?;
+    file.write_all(bytes)
+        .map_err(|error| format!("写入原配置文件失败：{error}"))?;
+    file.sync_all()
+        .map_err(|error| format!("同步原配置文件失败：{error}"))
 }
 
 fn backup_path(path: &Path) -> PathBuf {
@@ -1325,6 +1389,68 @@ mod tests {
         assert!(!legacy_webview.exists());
         assert!(config_dir.join(STORAGE_CONFIG_FILE).is_file());
         assert!(result.warning.unwrap().contains("首次启动"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn completed_marker_recovers_pending_config_without_recopying() {
+        let root = temp_dir("completed-recovery");
+        let legacy_data = root.join("legacy-data");
+        let legacy_webview = root.join("legacy-webview");
+        let config_dir = root.join("config");
+        let target = root.join("managed-target");
+        let install = root.join("install");
+        fs::create_dir_all(&legacy_data).unwrap();
+        fs::create_dir_all(&install).unwrap();
+        let source = source_fixture(&legacy_data);
+        fs::create_dir_all(legacy_webview.parent().unwrap()).unwrap();
+        fs::rename(&source.webview_dir, &legacy_webview).unwrap();
+        let source = MigrationSource {
+            label: legacy_data.clone(),
+            database_path: legacy_data.join(DATABASE_FILE),
+            webview_dir: legacy_webview.clone(),
+            managed_root: None,
+        };
+        migrate_data(&source, &target, "0.10.2").unwrap();
+
+        let config_path = config_path(&config_dir);
+        write_config(
+            &config_path,
+            &StorageConfig {
+                schema_version: STORAGE_SCHEMA_VERSION,
+                active_root: None,
+                pending_change: Some(PendingChange {
+                    target_root: target.to_string_lossy().to_string(),
+                    mode: DataRootChangeMode::Migrate,
+                    requested_at: now_timestamp(),
+                }),
+                last_error: None,
+                updated_at: now_timestamp(),
+            },
+        )
+        .unwrap();
+
+        let result = resolve_startup(
+            &AppPaths {
+                config_dir,
+                legacy_data_dir: legacy_data.clone(),
+                legacy_webview_dir: legacy_webview.clone(),
+                install_dir: install,
+                preferred_root: target.clone(),
+            },
+            "0.10.2",
+        )
+        .unwrap();
+
+        assert_eq!(result.paths.root, target.canonicalize().unwrap());
+        assert!(!legacy_data.join(DATABASE_FILE).exists());
+        assert!(!legacy_webview.exists());
+        let saved = load_config(&config_path).unwrap().0;
+        assert_eq!(
+            saved.active_root,
+            Some(target.to_string_lossy().to_string())
+        );
+        assert!(saved.pending_change.is_none());
         let _ = fs::remove_dir_all(root);
     }
 
