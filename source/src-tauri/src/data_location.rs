@@ -737,11 +737,17 @@ fn migration_is_complete(target_root: &Path, source_root: &Path) -> bool {
     if marker.status != "complete" {
         return false;
     }
+    let Ok(expected_target) = normalize_for_compare(target_root) else {
+        return false;
+    };
+    let Ok(expected_source) = normalize_for_compare(source_root) else {
+        return false;
+    };
     let target_matches = normalize_for_compare(Path::new(&marker.target))
-        .map(|path| path_key(&path) == path_key(target_root))
+        .map(|path| path_key(&path) == path_key(&expected_target))
         .unwrap_or(false);
     let source_matches = normalize_for_compare(Path::new(&marker.source))
-        .map(|path| path_key(&path) == path_key(source_root))
+        .map(|path| path_key(&path) == path_key(&expected_source))
         .unwrap_or(false);
     target_matches && source_matches
 }
@@ -1430,27 +1436,7 @@ mod tests {
         )
         .unwrap();
 
-        let marker: MigrationMarker = serde_json::from_slice(
-            &fs::read(
-                DataPaths::managed(target.clone())
-                    .meta_dir
-                    .join(MIGRATION_MARKER),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        let marker_target = normalize_for_compare(Path::new(&marker.target)).unwrap();
-        let expected_target = normalize_for_compare(&target).unwrap();
-        let marker_source = normalize_for_compare(Path::new(&marker.source)).unwrap();
-        let expected_source = normalize_for_compare(&legacy_data).unwrap();
-        assert!(
-            migration_is_complete(&target, &legacy_data),
-            "marker target={}, expected target={}, marker source={}, expected source={}",
-            path_key(&marker_target),
-            path_key(&expected_target),
-            path_key(&marker_source),
-            path_key(&expected_source)
-        );
+        assert!(migration_is_complete(&target, &legacy_data));
 
         let result = resolve_startup(
             &AppPaths {
