@@ -1454,9 +1454,10 @@ mod tests {
         assert!(!legacy_data.join(DATABASE_FILE).exists());
         assert!(!legacy_webview.exists());
         let saved = load_config(&config_path).unwrap().0;
+        let saved_root = PathBuf::from(saved.active_root.unwrap());
         assert_eq!(
-            saved.active_root,
-            Some(target.to_string_lossy().to_string())
+            path_key(&normalize_for_compare(&saved_root).unwrap()),
+            path_key(&normalize_for_compare(&target).unwrap())
         );
         assert!(saved.pending_change.is_none());
         let _ = fs::remove_dir_all(root);
