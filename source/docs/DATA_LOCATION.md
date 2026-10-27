@@ -58,6 +58,10 @@ WebView data directory.
 - No SQLite connection or main window exists while files are being copied.
 - Every copied file is checked for existence, size, and SHA-256 equality.
 - Copied SQLite databases are checked with `PRAGMA quick_check`.
+- Encryption attributes are preserved when the target filesystem accepts them.
+  If an EFS-encrypted source cannot create encrypted destination files,
+  Prompt Forge writes the verified copy as a regular file and displays a
+  warning; use BitLocker or another volume encryption layer for that target.
 - Target directories that already contain valid or incomplete Prompt Forge data
   are not overwritten automatically.
 - A failed or interrupted migration keeps the source data and retries only when

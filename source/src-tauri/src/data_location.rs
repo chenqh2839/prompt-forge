@@ -180,6 +180,7 @@ struct MigrationSource {
 struct CopyStats {
     files: usize,
     bytes: u64,
+    encryption_fallback_files: usize,
 }
 
 #[derive(Default)]
@@ -613,6 +614,21 @@ fn migrate_data(
         return Err("目标目录已有数据，不能静默覆盖。".to_string());
     }
 
+    let started_at = now_timestamp();
+    let mut marker = MigrationMarker {
+        schema_version: STORAGE_SCHEMA_VERSION,
+        status: "in_progress".to_string(),
+        app_version: version.to_string(),
+        source: source.label.to_string_lossy().to_string(),
+        target: target_root.to_string_lossy().to_string(),
+        started_at,
+        completed_at: None,
+        files: 0,
+        bytes: 0,
+        source_removed: false,
+    };
+    write_json_atomic(&marker_path, &marker)?;
+
     let staging = target_root.join(format!(".migration-{}", Uuid::new_v4()));
     fs::create_dir_all(staging.join("data"))
         .map_err(|error| format!("无法创建迁移暂存目录：{error}"))?;
@@ -639,19 +655,8 @@ fn migrate_data(
         copy_tree_verified(&source.webview_dir, &staging.join("webview"), &mut stats)?;
     }
 
-    let started_at = now_timestamp();
-    let mut marker = MigrationMarker {
-        schema_version: STORAGE_SCHEMA_VERSION,
-        status: "in_progress".to_string(),
-        app_version: version.to_string(),
-        source: source.label.to_string_lossy().to_string(),
-        target: target_root.to_string_lossy().to_string(),
-        started_at,
-        completed_at: None,
-        files: stats.files,
-        bytes: stats.bytes,
-        source_removed: false,
-    };
+    marker.files = stats.files;
+    marker.bytes = stats.bytes;
     write_json_atomic(&marker_path, &marker)?;
 
     let data_target = target_paths.data_dir.clone();
@@ -672,7 +677,12 @@ fn migrate_data(
     Ok(MigrationOutcome {
         files: stats.files,
         bytes: stats.bytes,
-        warning: None,
+        warning: (stats.encryption_fallback_files > 0).then(|| {
+            format!(
+                "{} 个源文件启用了 EFS，但目标位置不允许继承文件加密，已按普通文件迁移；请确认目标磁盘使用了 BitLocker 或其他适当的静态加密。",
+                stats.encryption_fallback_files
+            )
+        }),
     })
 }
 
@@ -928,25 +938,93 @@ fn copy_verified(source: &Path, target: &Path, stats: &mut CopyStats) -> Result<
     if source.is_symlink() {
         return Err(format!("迁移中止：不支持符号链接 {}", source.display()));
     }
-    fs::copy(source, target).map_err(|error| {
-        format!(
-            "复制文件失败 {} → {}：{error}",
-            source.display(),
-            target.display()
-        )
-    })?;
     let source_size = fs::metadata(source)
         .map_err(|error| format!("读取源文件大小失败：{error}"))?
         .len();
-    let target_size = fs::metadata(target)
-        .map_err(|error| format!("读取目标文件大小失败：{error}"))?
-        .len();
-    if source_size != target_size || file_sha256(source)? != file_sha256(target)? {
-        return Err(format!("迁移校验失败：{}", target.display()));
+    let parent = target
+        .parent()
+        .ok_or_else(|| format!("无法确定迁移目标目录：{}", target.display()))?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("创建迁移目标目录失败 {}：{error}", parent.display()))?;
+    let temp = target.with_file_name(format!(
+        ".migration-{}-{}",
+        target
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "file".to_string()),
+        Uuid::new_v4()
+    ));
+
+    let result = (|| {
+        let copy_result = fs::copy(source, &temp);
+        if let Err(copy_error) = copy_result {
+            if !source_uses_efs(source) {
+                return Err(format!(
+                    "复制文件失败 {} → {}：{copy_error}",
+                    source.display(),
+                    target.display()
+                ));
+            }
+            if temp.exists() {
+                fs::remove_file(&temp)
+                    .map_err(|error| format!("清理 EFS 回退临时文件失败：{error}"))?;
+            }
+            stream_copy_new(source, &temp)?;
+            stats.encryption_fallback_files += 1;
+        }
+
+        let target_size = fs::metadata(&temp)
+            .map_err(|error| format!("读取迁移临时文件大小失败：{error}"))?
+            .len();
+        if source_size != target_size || file_sha256(source)? != file_sha256(&temp)? {
+            return Err("迁移校验失败：临时文件与源文件不一致。".to_string());
+        }
+        if target.exists() {
+            if !target.is_file() {
+                return Err(format!("迁移目标不是文件：{}", target.display()));
+            }
+            fs::remove_file(target).map_err(|error| format!("替换迁移目标失败：{error}"))?;
+        }
+        fs::rename(&temp, target).map_err(|error| format!("提交迁移文件失败：{error}"))?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+        return result;
     }
+
     stats.files += 1;
     stats.bytes = stats.bytes.saturating_add(source_size);
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn source_uses_efs(path: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_ENCRYPTED: u32 = 0x0000_4000;
+    fs::metadata(path)
+        .map(|metadata| metadata.file_attributes() & FILE_ATTRIBUTE_ENCRYPTED != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn source_uses_efs(_path: &Path) -> bool {
+    false
+}
+
+fn stream_copy_new(source: &Path, target: &Path) -> Result<(), String> {
+    let mut input = File::open(source).map_err(|error| format!("打开源文件失败：{error}"))?;
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(target)
+        .map_err(|error| format!("创建迁移临时文件失败：{error}"))?;
+    std::io::copy(&mut input, &mut output).map_err(|error| format!("流式复制文件失败：{error}"))?;
+    output
+        .sync_all()
+        .map_err(|error| format!("同步迁移临时文件失败：{error}"))
 }
 
 fn file_sha256(path: &Path) -> Result<String, String> {
@@ -1073,7 +1151,19 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
         .map_err(|error| format!("同步临时配置文件失败：{error}"))?;
 
     if path.exists() {
-        fs::copy(path, &backup).map_err(|error| format!("备份配置文件失败：{error}"))?;
+        let mut source =
+            File::open(path).map_err(|error| format!("打开待备份配置文件失败：{error}"))?;
+        let mut target = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&backup)
+            .map_err(|error| format!("创建配置备份失败：{error}"))?;
+        std::io::copy(&mut source, &mut target)
+            .map_err(|error| format!("复制配置备份失败：{error}"))?;
+        target
+            .sync_all()
+            .map_err(|error| format!("同步配置备份失败：{error}"))?;
         fs::remove_file(path).map_err(|error| format!("替换配置文件失败：{error}"))?;
     }
     fs::rename(&temp, path).map_err(|error| format!("提交配置文件失败：{error}"))?;
@@ -1370,9 +1460,13 @@ mod tests {
         )
         .unwrap();
         create_database(&target_paths.data_dir.join(DATABASE_FILE));
+        let orphan = target.join(".migration-orphan");
+        fs::create_dir_all(orphan.join("partial")).unwrap();
+        fs::write(orphan.join("partial/file"), b"incomplete").unwrap();
 
         let outcome = migrate_data(&source, &target, "0.10.2").unwrap();
         assert!(outcome.files >= 2);
+        assert!(!orphan.exists());
         assert!(source.database_path.is_file());
         assert!(target.join("data").join(DATABASE_FILE).is_file());
         assert!(target.join("webview").join("Local Storage/theme").is_file());
