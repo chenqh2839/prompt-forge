@@ -1,6 +1,6 @@
 [package]
 name = "prompt-forge"
-version = "0.10.2"
+version = "0.10.3"
 description = "A local-first prompt refinement desktop application"
 authors = ["Prompt Forge"]
 license = "Apache-2.0"
@@ -23,6 +23,7 @@ sha2 = "0.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["macros", "sync"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

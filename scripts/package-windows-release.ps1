@@ -8,6 +8,8 @@ param(
 
     [string]$WebView2Loader,
 
+    [string]$Version = '0.10.3',
+
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\release-assets')
 )
 
@@ -38,7 +40,7 @@ if (-not $outputPath.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgn
 }
 
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
-$packageName = 'PromptForge-0.10.2-Windows-x64'
+$packageName = "PromptForge-$Version-Windows-x64"
 $stagingRoot = Join-Path $outputPath ".staging-$([guid]::NewGuid().ToString('N'))"
 $stagingPackage = Join-Path $stagingRoot $packageName
 $portableDirectory = Join-Path $stagingPackage '便携版'
@@ -51,7 +53,7 @@ try {
     if ($loaderPath) {
         Copy-Item -LiteralPath $loaderPath -Destination (Join-Path $portableDirectory 'WebView2Loader.dll')
     }
-    Copy-Item -LiteralPath $installerPath -Destination (Join-Path $installerDirectory 'Prompt Forge_0.10.2_x64-setup.exe')
+    Copy-Item -LiteralPath $installerPath -Destination (Join-Path $installerDirectory "Prompt Forge_${Version}_x64-setup.exe")
     Copy-Item -LiteralPath (Join-Path $repoRoot 'source\docs\INSTALL.txt') -Destination (Join-Path $stagingPackage 'INSTALL.txt')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $stagingPackage 'LICENSE')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'NOTICE') -Destination (Join-Path $stagingPackage 'NOTICE')
@@ -73,7 +75,7 @@ try {
 
     $archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $archiveSize = (Get-Item -LiteralPath $archivePath).Length
-    Set-Content -LiteralPath (Join-Path $outputPath 'SHA256SUMS-v0.10.2.txt') `
+    Set-Content -LiteralPath (Join-Path $outputPath "SHA256SUMS-v$Version.txt") `
         -Value "$archiveHash  $packageName.zip" -Encoding ascii
 
     [pscustomobject]@{

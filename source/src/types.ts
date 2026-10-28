@@ -153,6 +153,16 @@ export interface HistoryDraft {
   sourceHistoryIds?: string[];
 }
 
+export interface MoveHistoryFailure {
+  id: string;
+  reason: string;
+}
+
+export interface MoveHistoryResult {
+  movedIds: string[];
+  failures: MoveHistoryFailure[];
+}
+
 export interface ProjectInteractionSummary {
   historyId: string;
   title: string;

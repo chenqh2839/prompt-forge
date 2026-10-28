@@ -8,6 +8,7 @@ import type {
   DistillTemplateInput,
   HistoryDraft,
   HistoryItem,
+  MoveHistoryResult,
   PromptAnalysis,
   ProjectHistorySummaryResult,
   ProjectContext,
@@ -36,13 +37,17 @@ export const bridge = {
   clearApiKey: () => invoke<AppSettings>("clear_api_key"),
   testConnection: (input: SettingsInput) =>
     invoke<string>("test_connection", { input }),
-  analyzePrompt: (request: AnalyzeRequest) =>
-    invoke<PromptAnalysis>("analyze_prompt", { request }),
+  analyzePrompt: (request: AnalyzeRequest, requestId: string) =>
+    invoke<PromptAnalysis>("analyze_prompt", { request, requestId }),
+  cancelPromptAnalysis: (requestId: string) =>
+    invoke<boolean>("cancel_prompt_analysis", { requestId }),
   analyzeReply: (request: ReplyRequest) =>
     invoke<ReplyAnalysis>("analyze_reply", { request }),
   saveHistory: (draft: HistoryDraft) =>
     invoke<HistoryItem>("save_history", { draft }),
   listHistory: () => invoke<HistoryItem[]>("list_history"),
+  moveHistoryToProject: (ids: string[], projectId: string | null) =>
+    invoke<MoveHistoryResult>("move_history_to_project", { ids, projectId }),
   getHistoryAttachments: (id: string) =>
     invoke<string>("get_history_attachments", { id }),
   deleteHistory: (id: string) => invoke<void>("delete_history", { id }),

@@ -1,7 +1,9 @@
 use std::{
+    collections::HashMap,
     env, fs,
     net::IpAddr,
     path::{Path, PathBuf},
+    sync::Mutex,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -14,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
 const CREDENTIAL_SERVICE: &str = "com.promptforge.desktop";
@@ -24,9 +27,55 @@ const MAX_ATTACHMENT_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT_CHARS: usize = 60_000;
 const MAX_PROMPT_CONTEXT_CHARS: usize = 24_000;
 const MAX_ROLE_DECISION_CHARS: usize = 240;
+const ANALYSIS_CANCELLED_ERROR: &str = "本轮分析已放弃。";
 
 struct AppState {
     db_path: PathBuf,
+    analysis_cancellations: AnalysisCancellationRegistry,
+}
+
+impl AppState {
+    fn new(db_path: PathBuf) -> Self {
+        Self {
+            db_path,
+            analysis_cancellations: AnalysisCancellationRegistry::default(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct AnalysisCancellationRegistry {
+    active: Mutex<HashMap<String, oneshot::Sender<()>>>,
+}
+
+impl AnalysisCancellationRegistry {
+    fn begin(&self, request_id: &str) -> Result<oneshot::Receiver<()>, String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "分析取消注册表暂时不可用，请重新发起。".to_string())?;
+        if active.contains_key(request_id) {
+            return Err("相同分析请求已在进行中，请重新发起。".to_string());
+        }
+        let (sender, receiver) = oneshot::channel();
+        active.insert(request_id.to_string(), sender);
+        Ok(receiver)
+    }
+
+    fn cancel(&self, request_id: &str) -> bool {
+        let Ok(mut active) = self.active.lock() else {
+            return false;
+        };
+        active
+            .remove(request_id)
+            .is_some_and(|sender| sender.send(()).is_ok())
+    }
+
+    fn finish(&self, request_id: &str) {
+        if let Ok(mut active) = self.active.lock() {
+            active.remove(request_id);
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -512,6 +561,20 @@ struct HistoryDraft {
     attachments_json: String,
     #[serde(default)]
     source_history_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveHistoryFailure {
+    id: String,
+    reason: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveHistoryResult {
+    moved_ids: Vec<String>,
+    failures: Vec<MoveHistoryFailure>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2370,9 +2433,33 @@ fn normalize_decision(
 
 #[tauri::command]
 async fn analyze_prompt(
-    mut request: AnalyzeRequest,
+    request: AnalyzeRequest,
+    request_id: String,
     state: State<'_, AppState>,
 ) -> Result<PromptAnalysis, String> {
+    let request_id = request_id.trim();
+    if request_id.is_empty() || request_id.chars().count() > 128 {
+        return Err("分析请求标识无效，请重新发起。".to_string());
+    }
+    let cancel_receiver = state.analysis_cancellations.begin(request_id)?;
+    let result = analyze_prompt_inner(request, state.inner(), cancel_receiver).await;
+    state.analysis_cancellations.finish(request_id);
+    result
+}
+
+#[tauri::command]
+fn cancel_prompt_analysis(request_id: String, state: State<'_, AppState>) -> bool {
+    state.analysis_cancellations.cancel(request_id.trim())
+}
+
+async fn analyze_prompt_inner(
+    mut request: AnalyzeRequest,
+    state: &AppState,
+    mut cancel_receiver: oneshot::Receiver<()>,
+) -> Result<PromptAnalysis, String> {
+    if cancel_receiver.try_recv().is_ok() {
+        return Err(ANALYSIS_CANCELLED_ERROR.to_string());
+    }
     if request.original_prompt.trim().is_empty() {
         return Err("原始提示词不能为空。".to_string());
     }
@@ -2439,8 +2526,8 @@ async fn analyze_prompt(
         request.force_generate = true;
     }
 
-    let config = config_from_store(&state)?;
-    let reuse_project_role = reuse_project_role_from_store(&state)?;
+    let config = config_from_store(state)?;
+    let reuse_project_role = reuse_project_role_from_store(state)?;
     let context = build_prompt_context(&request);
     if request
         .attachments
@@ -2453,36 +2540,48 @@ async fn analyze_prompt(
             config.model
         ));
     }
-    let result = send_chat(
-        &config,
-        vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: json!(system_prompt(
-                    &request.template_id,
-                    &request.template_name,
-                    &request.template_focus,
-                    reuse_project_role,
-                    &context,
-                )),
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: build_prompt_user_content(&request, &context)?,
-            },
-        ],
-        if request.force_generate {
-            4000
-        } else {
-            CLARIFY_MAX_TOKENS
+    if cancel_receiver.try_recv().is_ok() {
+        return Err(ANALYSIS_CANCELLED_ERROR.to_string());
+    }
+    let messages = vec![
+        ChatMessage {
+            role: "system".to_string(),
+            content: json!(system_prompt(
+                &request.template_id,
+                &request.template_name,
+                &request.template_focus,
+                reuse_project_role,
+                &context,
+            )),
         },
-    )
-    .await?;
+        ChatMessage {
+            role: "user".to_string(),
+            content: build_prompt_user_content(&request, &context)?,
+        },
+    ];
+    let max_tokens = if request.force_generate {
+        4000
+    } else {
+        CLARIFY_MAX_TOKENS
+    };
+    let result = tokio::select! {
+        biased;
+        _ = &mut cancel_receiver => {
+            return Err(ANALYSIS_CANCELLED_ERROR.to_string());
+        }
+        result = send_chat(&config, messages, max_tokens) => result?,
+    };
+    if cancel_receiver.try_recv().is_ok() {
+        return Err(ANALYSIS_CANCELLED_ERROR.to_string());
+    }
     let mut decision = normalize_decision(
         parse_decision(&result.content)?,
         reuse_project_role,
         &context,
     )?;
+    if cancel_receiver.try_recv().is_ok() {
+        return Err(ANALYSIS_CANCELLED_ERROR.to_string());
+    }
     decision.tokens_used = result.total_tokens;
     Ok(decision)
 }
@@ -2840,10 +2939,117 @@ fn read_history(conn: &Connection, include_attachments: bool) -> Result<Vec<Hist
         .map_err(|error| format!("读取历史记录失败：{error}"))
 }
 
+fn move_history_to_project_record(
+    conn: &mut Connection,
+    ids: &[String],
+    project_id: Option<&str>,
+) -> Result<MoveHistoryResult, String> {
+    let mut unique_ids = Vec::new();
+    for id in ids {
+        let id = id.trim();
+        if !id.is_empty() && !unique_ids.iter().any(|existing| existing == id) {
+            unique_ids.push(id.to_string());
+        }
+    }
+    if unique_ids.is_empty() {
+        return Ok(MoveHistoryResult {
+            moved_ids: Vec::new(),
+            failures: Vec::new(),
+        });
+    }
+
+    let target_project_id = project_id
+        .map(str::trim)
+        .filter(|project_id| !project_id.is_empty());
+    let transaction = conn
+        .transaction()
+        .map_err(|error| format!("启动历史记录移动事务失败：{error}"))?;
+
+    if let Some(project_id) = target_project_id {
+        let project_exists = transaction
+            .query_row(
+                "SELECT 1 FROM projects WHERE id = ?1",
+                params![project_id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|error| format!("校验目标项目失败：{error}"))?
+            .is_some();
+        if !project_exists {
+            return Err("目标项目不存在，历史记录未移动。".to_string());
+        }
+    }
+
+    let mut failures = Vec::new();
+    for id in &unique_ids {
+        let exists = transaction
+            .query_row("SELECT 1 FROM history WHERE id = ?1", params![id], |_| {
+                Ok(())
+            })
+            .optional()
+            .map_err(|error| format!("校验历史记录失败：{error}"))?
+            .is_some();
+        if !exists {
+            failures.push(MoveHistoryFailure {
+                id: id.clone(),
+                reason: "历史记录不存在或已被删除。".to_string(),
+            });
+        }
+    }
+
+    if !failures.is_empty() {
+        drop(transaction);
+        return Ok(MoveHistoryResult {
+            moved_ids: Vec::new(),
+            failures,
+        });
+    }
+
+    let updated_at = now_seconds();
+    for id in &unique_ids {
+        transaction
+            .execute(
+                "UPDATE history SET project_id = ?1, updated_at = ?2 WHERE id = ?3",
+                params![target_project_id, updated_at, id],
+            )
+            .map_err(|error| format!("移动历史记录 {id} 失败：{error}"))?;
+        transaction
+            .execute(
+                "DELETE FROM project_history_summaries WHERE history_ids_json LIKE ?1",
+                params![format!("%\"{id}\"%")],
+            )
+            .map_err(|error| format!("清理历史记录摘要缓存失败：{error}"))?;
+    }
+
+    transaction
+        .commit()
+        .map_err(|error| format!("提交历史记录移动事务失败：{error}"))?;
+    Ok(MoveHistoryResult {
+        moved_ids: unique_ids,
+        failures: Vec::new(),
+    })
+}
+
 #[tauri::command]
 fn list_history(state: State<'_, AppState>) -> Result<Vec<HistoryItem>, String> {
     let conn = open_db(&state)?;
     read_history(&conn, false)
+}
+
+#[tauri::command]
+fn move_history_to_project(
+    ids: Vec<String>,
+    project_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<MoveHistoryResult, String> {
+    if ids.is_empty() {
+        return Ok(MoveHistoryResult {
+            moved_ids: Vec::new(),
+            failures: Vec::new(),
+        });
+    }
+    let mut conn = open_db(&state)?;
+    move_history_to_project_record(&mut conn, &ids, project_id.as_deref())
 }
 
 #[tauri::command]
@@ -3679,9 +3885,7 @@ pub fn run() {
             )
             .map_err(std::io::Error::other)?;
 
-            let state = AppState {
-                db_path: resolved.paths.database_path.clone(),
-            };
+            let state = AppState::new(resolved.paths.database_path.clone());
             open_db(&state).map_err(std::io::Error::other)?;
             app.manage(state);
             app.manage(DataLocationState {
@@ -3716,11 +3920,13 @@ pub fn run() {
             clear_api_key,
             test_connection,
             analyze_prompt,
+            cancel_prompt_analysis,
             analyze_reply,
             summarize_project_histories,
             distill_project_template,
             save_history,
             list_history,
+            move_history_to_project,
             get_history_attachments,
             delete_history,
             clear_history,
@@ -4240,9 +4446,7 @@ mod tests {
     fn variable_templates_persist_with_rules_and_examples() {
         let db_path =
             std::env::temp_dir().join(format!("prompt-forge-workflow-{}.sqlite3", Uuid::new_v4()));
-        let state = AppState {
-            db_path: db_path.clone(),
-        };
+        let state = AppState::new(db_path.clone());
         let conn = open_db(&state).unwrap();
         let saved = save_variable_template_record(
             &conn,
@@ -4340,9 +4544,7 @@ mod tests {
     fn custom_scenes_persist_and_update_in_sqlite() {
         let db_path =
             std::env::temp_dir().join(format!("prompt-forge-test-{}.sqlite3", Uuid::new_v4()));
-        let state = AppState {
-            db_path: db_path.clone(),
-        };
+        let state = AppState::new(db_path.clone());
         let conn = open_db(&state).unwrap();
         let saved = save_custom_template_record(
             &conn,
@@ -4385,9 +4587,7 @@ mod tests {
     fn projects_persist_and_history_keeps_project_link() {
         let db_path =
             std::env::temp_dir().join(format!("prompt-forge-project-{}.sqlite3", Uuid::new_v4()));
-        let state = AppState {
-            db_path: db_path.clone(),
-        };
+        let state = AppState::new(db_path.clone());
         let conn = open_db(&state).unwrap();
         let project = save_project_record(
             &conn,
@@ -4438,6 +4638,192 @@ mod tests {
     }
 
     #[test]
+    fn history_move_updates_project_and_unfiled_without_duplicates() {
+        let db_path =
+            std::env::temp_dir().join(format!("prompt-forge-move-{}.sqlite3", Uuid::new_v4()));
+        let state = AppState::new(db_path.clone());
+        let mut conn = open_db(&state).unwrap();
+        let project_a = save_project_record(
+            &conn,
+            ProjectInput {
+                id: None,
+                name: "项目 A".to_string(),
+                goal: "目标 A".to_string(),
+                style: String::new(),
+                characters: String::new(),
+                history_context: String::new(),
+                materials: String::new(),
+            },
+        )
+        .unwrap();
+        let project_b = save_project_record(
+            &conn,
+            ProjectInput {
+                id: None,
+                name: "项目 B".to_string(),
+                goal: "目标 B".to_string(),
+                style: String::new(),
+                characters: String::new(),
+                history_context: String::new(),
+                materials: String::new(),
+            },
+        )
+        .unwrap();
+        for id in ["history-a", "history-b", "history-untouched"] {
+            conn.execute(
+                r#"INSERT INTO history(
+                    id, title, original_prompt, template_id, optimized_prompt,
+                    transcript_json, model, project_id, created_at, updated_at
+                ) VALUES(?1, ?1, '原始提示词', 'general', '优化提示词', '[]', 'test-model', NULL, 1, 1)"#,
+                params![id],
+            )
+            .unwrap();
+        }
+
+        let single = move_history_to_project_record(
+            &mut conn,
+            &["history-a".to_string()],
+            Some(&project_a.id),
+        )
+        .unwrap();
+        assert_eq!(single.moved_ids, vec!["history-a".to_string()]);
+        assert!(single.failures.is_empty());
+
+        let batch = move_history_to_project_record(
+            &mut conn,
+            &[
+                "history-a".to_string(),
+                "history-b".to_string(),
+                "history-a".to_string(),
+            ],
+            Some(&project_b.id),
+        )
+        .unwrap();
+        assert_eq!(batch.moved_ids.len(), 2);
+        assert!(batch.failures.is_empty());
+        let rows = read_history(&conn, false).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            rows.iter()
+                .find(|item| item.id == "history-a")
+                .unwrap()
+                .project_id
+                .as_deref(),
+            Some(project_b.id.as_str())
+        );
+        assert_eq!(
+            rows.iter()
+                .find(|item| item.id == "history-b")
+                .unwrap()
+                .project_id
+                .as_deref(),
+            Some(project_b.id.as_str())
+        );
+        assert!(rows
+            .iter()
+            .find(|item| item.id == "history-untouched")
+            .unwrap()
+            .project_id
+            .is_none());
+
+        let unfiled = move_history_to_project_record(
+            &mut conn,
+            &["history-a".to_string(), "history-b".to_string()],
+            None,
+        )
+        .unwrap();
+        assert_eq!(unfiled.moved_ids.len(), 2);
+        let rows = read_history(&conn, false).unwrap();
+        assert!(rows
+            .iter()
+            .filter(|item| item.id == "history-a" || item.id == "history-b")
+            .all(|item| item.project_id.is_none()));
+        drop(conn);
+
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(db_path.with_extension("sqlite3-wal"));
+        let _ = fs::remove_file(db_path.with_extension("sqlite3-shm"));
+    }
+
+    #[test]
+    fn history_move_rolls_back_when_any_id_is_missing() {
+        let db_path = std::env::temp_dir().join(format!(
+            "prompt-forge-move-rollback-{}.sqlite3",
+            Uuid::new_v4()
+        ));
+        let state = AppState::new(db_path.clone());
+        let mut conn = open_db(&state).unwrap();
+        let project = save_project_record(
+            &conn,
+            ProjectInput {
+                id: None,
+                name: "目标项目".to_string(),
+                goal: "验证事务".to_string(),
+                style: String::new(),
+                characters: String::new(),
+                history_context: String::new(),
+                materials: String::new(),
+            },
+        )
+        .unwrap();
+        conn.execute(
+            r#"INSERT INTO history(
+                id, title, original_prompt, template_id, optimized_prompt,
+                transcript_json, model, project_id, created_at, updated_at
+            ) VALUES('history-valid', '有效记录', '原始提示词', 'general', '优化提示词',
+                     '[]', 'test-model', NULL, 1, 1)"#,
+            [],
+        )
+        .unwrap();
+
+        let result = move_history_to_project_record(
+            &mut conn,
+            &["history-valid".to_string(), "history-missing".to_string()],
+            Some(&project.id),
+        )
+        .unwrap();
+        assert!(result.moved_ids.is_empty());
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].id, "history-missing");
+        let project_id: Option<String> = conn
+            .query_row(
+                "SELECT project_id FROM history WHERE id = 'history-valid'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(project_id.is_none());
+
+        let empty =
+            move_history_to_project_record(&mut conn, &[], Some("missing-project")).unwrap();
+        assert!(empty.moved_ids.is_empty());
+        assert!(empty.failures.is_empty());
+        assert!(move_history_to_project_record(
+            &mut conn,
+            &["history-valid".to_string()],
+            Some("missing-project"),
+        )
+        .is_err());
+        drop(conn);
+
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(db_path.with_extension("sqlite3-wal"));
+        let _ = fs::remove_file(db_path.with_extension("sqlite3-shm"));
+    }
+
+    #[test]
+    fn analysis_cancellation_is_idempotent_and_rejects_duplicate_ids() {
+        let registry = AnalysisCancellationRegistry::default();
+        let mut receiver = registry.begin("request-1").unwrap();
+        assert!(registry.begin("request-1").is_err());
+        assert!(registry.cancel("request-1"));
+        assert!(receiver.try_recv().is_ok());
+        assert!(!registry.cancel("request-1"));
+        registry.finish("request-1");
+        let _receiver = registry.begin("request-1").unwrap();
+    }
+
+    #[test]
     fn upgrades_existing_history_with_project_reference() {
         let db_path =
             std::env::temp_dir().join(format!("prompt-forge-migration-{}.sqlite3", Uuid::new_v4()));
@@ -4461,9 +4847,7 @@ mod tests {
             .unwrap();
         drop(old_conn);
 
-        let state = AppState {
-            db_path: db_path.clone(),
-        };
+        let state = AppState::new(db_path.clone());
         let upgraded = open_db(&state).unwrap();
         let has_project_id = upgraded
             .prepare("PRAGMA table_info(history)")

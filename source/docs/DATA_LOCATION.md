@@ -1,6 +1,6 @@
 # Data Location and Migration
 
-Prompt Forge v0.10.2 stores application data under a configurable data root.
+Prompt Forge v0.10.2 and later store application data under a configurable data root.
 The default Windows managed root is `D:\PromptForge-Data` when drive D is
 available. If D is unavailable, the application falls back to the legacy
 AppData locations.

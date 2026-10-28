@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   Braces,
@@ -19,9 +19,11 @@ import {
 } from "lucide-react";
 import type {
   HistoryItem,
+  MoveHistoryResult,
   ProjectContext,
   TemplateDefinition,
 } from "../types";
+import { MoveHistoryDialog } from "./MoveHistoryDialog";
 
 interface SidebarProps {
   templates: TemplateDefinition[];
@@ -39,6 +41,10 @@ interface SidebarProps {
   onCreateProject: () => void;
   onEditProject: (project: ProjectContext) => void;
   onSelectHistory: (item: HistoryItem) => void;
+  onMoveHistory: (
+    ids: string[],
+    projectId: string | null,
+  ) => Promise<MoveHistoryResult>;
   onDeleteHistory: (id: string) => void;
   onClearHistory: () => void;
   onExport: () => void;
@@ -89,11 +95,14 @@ export function Sidebar({
   onCreateProject,
   onEditProject,
   onSelectHistory,
+  onMoveHistory,
   onDeleteHistory,
   onClearHistory,
   onExport,
 }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>("scenes");
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
+  const [moveRequestIds, setMoveRequestIds] = useState<string[]>([]);
   const customTemplates = templates.filter((template) => template.isCustom);
   const builtInTemplates = templates.filter((template) => !template.isCustom);
 
@@ -112,8 +121,29 @@ export function Sidebar({
     if (window.innerWidth < 980) onClose();
   };
 
+  useEffect(() => {
+    const available = new Set(history.map((item) => item.id));
+    setSelectedHistoryIds((current) =>
+      current.filter((id) => available.has(id)),
+    );
+  }, [history]);
+
+  const toggleHistorySelection = (id: string) => {
+    setSelectedHistoryIds((current) =>
+      current.includes(id)
+        ? current.filter((selectedId) => selectedId !== id)
+        : [...current, id],
+    );
+  };
+
+  const closeMoveDialog = () => {
+    setMoveRequestIds([]);
+    setSelectedHistoryIds([]);
+  };
+
   return (
-    <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
+    <>
+      <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-mobile-head">
         <span>WORKSPACE NAVIGATION</span>
         <button onClick={onClose} aria-label="关闭导航">
@@ -338,6 +368,25 @@ export function Sidebar({
                 清空
               </button>
             </div>
+            {selectedHistoryIds.length > 0 && (
+              <div className="history-batch-bar">
+                <span>已选 {selectedHistoryIds.length} 条</span>
+                <button
+                  type="button"
+                  onClick={() => setMoveRequestIds([...selectedHistoryIds])}
+                >
+                  <FolderKanban size={13} />
+                  移动到项目…
+                </button>
+                <button
+                  type="button"
+                  className="history-batch-clear"
+                  onClick={() => setSelectedHistoryIds([])}
+                >
+                  取消选择
+                </button>
+              </div>
+            )}
             <div className="history-list">
               {history.length === 0 ? (
                 <div className="empty-history">
@@ -347,47 +396,60 @@ export function Sidebar({
                 </div>
               ) : (
                 history.map((item) => (
-                  <button
+                  <div
                     key={item.id}
                     className={`history-item ${
                       item.id === activeHistoryId ? "active" : ""
                     }`}
-                    onClick={() => selectHistory(item)}
                   >
-                    <span className="history-meta">
-                      <span>{formatDate(item.updatedAt)}</span>
-                      <span>
-                        {templates.find((t) => t.id === item.templateId)
-                          ?.shortName ?? "CUSTOM"}
+                    <label
+                      className="history-select"
+                      aria-label={`选择历史记录“${item.title}”`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedHistoryIds.includes(item.id)}
+                        onChange={() => toggleHistorySelection(item.id)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="history-open"
+                      onClick={() => selectHistory(item)}
+                    >
+                      <span className="history-meta">
+                        <span>{formatDate(item.updatedAt)}</span>
+                        <span>
+                          {templates.find((t) => t.id === item.templateId)
+                            ?.shortName ?? "CUSTOM"}
+                        </span>
                       </span>
-                    </span>
-                    <strong>{item.title}</strong>
-                    {item.projectId && (
+                      <strong>{item.title}</strong>
                       <span className="history-project">
                         {projects.find(
                           (project) => project.id === item.projectId,
-                        )?.name ?? "已删除项目"}
+                        )?.name ?? "未归档"}
                       </span>
-                    )}
-                    <span
-                      className="history-delete"
-                      role="button"
-                      tabIndex={0}
-                      title="删除记录"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDeleteHistory(item.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.stopPropagation();
-                          onDeleteHistory(item.id);
-                        }
-                      }}
-                    >
-                      <Trash2 size={13} />
+                    </button>
+                    <span className="history-actions">
+                      <button
+                        type="button"
+                        title="移动到项目…"
+                        aria-label={`移动历史记录“${item.title}”`}
+                        onClick={() => setMoveRequestIds([item.id])}
+                      >
+                        <FolderKanban size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        title="删除记录"
+                        aria-label={`删除历史记录“${item.title}”`}
+                        onClick={() => onDeleteHistory(item.id)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </span>
-                  </button>
+                  </div>
                 ))
               )}
             </div>
@@ -395,10 +457,20 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="sidebar-foot">
-        <span>PF / LOCAL STUDIO</span>
-        <span>v0.10.2</span>
-      </div>
-    </aside>
+        <div className="sidebar-foot">
+          <span>PF / LOCAL STUDIO</span>
+          <span>v0.10.3</span>
+        </div>
+      </aside>
+      {moveRequestIds.length > 0 && (
+        <MoveHistoryDialog
+          histories={history}
+          projects={projects}
+          ids={moveRequestIds}
+          onClose={closeMoveDialog}
+          onMove={onMoveHistory}
+        />
+      )}
+    </>
   );
 }

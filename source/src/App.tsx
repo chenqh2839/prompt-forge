@@ -21,6 +21,7 @@ import type {
   ClarificationQuestion,
   ClarificationTurn,
   HistoryItem,
+  MoveHistoryResult,
   PromptAttachment,
   PromptAnalysis,
   PromptVariant,
@@ -77,6 +78,15 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 const KEEP_ATTACHMENTS_STORAGE_KEY = "prompt-forge-keep-attachments-v1";
+
+type AnalysisRunState = "idle" | "running" | "done" | "cancelled";
+
+function newAnalysisRequestId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `pf-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+}
 
 function readableError(error: unknown) {
   if (typeof error === "string") return error;
@@ -179,11 +189,16 @@ export default function App() {
   const [roleDecision, setRoleDecision] = useState("");
   const [optimizedPrompt, setOptimizedPrompt] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
+  const [analysisRunState, setAnalysisRunState] =
+    useState<AnalysisRunState>("idle");
+  const [analysisCancelBusy, setAnalysisCancelBusy] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [tokensUsed, setTokensUsed] = useState(0);
   const [revisionCount, setRevisionCount] = useState(0);
+  const activeAnalysisRequestRef = useRef<string | null>(null);
+  const analysisCancelPendingRef = useRef(false);
 
   const availableTemplates = useMemo(
     () => [...builtInTemplates, ...customTemplates],
@@ -498,6 +513,9 @@ export default function App() {
         setError("请先输入原始提示词。");
         return;
       }
+      const requestId = newAnalysisRequestId();
+      activeAnalysisRequestRef.current = requestId;
+      setAnalysisRunState("running");
       setError("");
       setStage(forceGenerate ? "generating" : "analyzing");
       try {
@@ -523,7 +541,10 @@ export default function App() {
             })),
           })),
           forceGenerate,
-        });
+        }, requestId);
+
+        if (activeAnalysisRequestRef.current !== requestId) return;
+        setAnalysisRunState("done");
 
         setRationale(result.rationale);
         setRoleDecision(result.roleDecision ?? "");
@@ -547,8 +568,14 @@ export default function App() {
         );
         setStage("clarifying");
       } catch (analysisError) {
+        if (activeAnalysisRequestRef.current !== requestId) return;
+        setAnalysisRunState("idle");
         setStage(transcriptRounds.length ? "clarifying" : "idle");
         setError(`模型调用失败：${readableError(analysisError)}`);
+      } finally {
+        if (activeAnalysisRequestRef.current === requestId) {
+          activeAnalysisRequestRef.current = null;
+        }
       }
     },
     [
@@ -563,6 +590,57 @@ export default function App() {
       projectInteractionPayload,
     ],
   );
+
+  const handleDiscardAnalysis = async () => {
+    const requestId = activeAnalysisRequestRef.current;
+    if (
+      analysisRunState !== "running" ||
+      !requestId ||
+      analysisCancelPendingRef.current
+    ) {
+      return;
+    }
+    analysisCancelPendingRef.current = true;
+    const hasGeneratedContent = Boolean(optimizedPrompt.trim());
+    const confirmed = window.confirm(
+      hasGeneratedContent
+        ? "放弃本轮分析？已生成的内容将被丢弃；原始提示词、背景和附件会保留。"
+        : "放弃本轮分析？已输入的提示词、背景和附件会保留，本轮中间结果会被丢弃。",
+    );
+    if (!confirmed) {
+      analysisCancelPendingRef.current = false;
+      return;
+    }
+
+    activeAnalysisRequestRef.current = null;
+    setAnalysisCancelBusy(true);
+    setAnalysisRunState("cancelled");
+    try {
+      await bridge.cancelPromptAnalysis(requestId);
+    } catch {
+      // 即使取消命令没有及时到达 Rust 侧，也会通过 request ID 丢弃该轮结果。
+    } finally {
+      setStage("idle");
+      setCurrentQuestions([]);
+      setAnswers({});
+      setRationale("");
+      setRoleDecision("");
+      setOptimizedPrompt("");
+      setLastReadAttachmentNames([]);
+      setLastSourceHistoryIds([]);
+      setVariants([]);
+      setActiveVariantId(null);
+      setVariableWorkflow(null);
+      setBatchProgress(null);
+      setRevisionCount(0);
+      setTokensUsed(0);
+      setError("");
+      setAnalysisRunState("idle");
+      setAnalysisCancelBusy(false);
+      analysisCancelPendingRef.current = false;
+      showToast("已放弃本轮分析，输入内容已保留");
+    }
+  };
 
   const handleStart = async () => {
     if (attachmentBusy) {
@@ -669,7 +747,7 @@ export default function App() {
           },
           rounds: [],
           forceGenerate: true,
-        });
+        }, newAnalysisRequestId());
         if (!result.optimizedPrompt) {
           throw new Error("模型返回了空提示词。");
         }
@@ -807,7 +885,7 @@ export default function App() {
           })),
         })),
         forceGenerate: true,
-      });
+      }, newAnalysisRequestId());
       if (!result.optimizedPrompt) {
         throw new Error("模型返回了空结果。");
       }
@@ -873,7 +951,7 @@ export default function App() {
               })),
             })),
         forceGenerate: true,
-      });
+      }, newAnalysisRequestId());
       if (!result.optimizedPrompt) {
         throw new Error("模型没有返回修改后的提示词。");
       }
@@ -957,6 +1035,9 @@ export default function App() {
     setRoleDecision("");
     setOptimizedPrompt("");
     setStage("idle");
+    setAnalysisRunState("idle");
+    activeAnalysisRequestRef.current = null;
+    analysisCancelPendingRef.current = false;
     setError("");
     setActiveHistoryId(null);
     setTokensUsed(0);
@@ -1109,6 +1190,32 @@ export default function App() {
       setError(`删除失败：${readableError(deleteError)}`);
     }
   };
+
+  const handleMoveHistory = useCallback(
+    async (
+      ids: string[],
+      projectId: string | null,
+    ): Promise<MoveHistoryResult> => {
+      const result = await bridge.moveHistoryToProject(ids, projectId);
+      if (result.movedIds.length > 0) {
+        const moved = new Set(result.movedIds);
+        if (selectedHistoryIds.some((id) => moved.has(id))) {
+          setSelectedHistoryIds([]);
+          setHistorySummaryResult(null);
+          setLastSourceHistoryIds([]);
+        }
+        await refreshHistory();
+        const targetName =
+          projects.find((project) => project.id === projectId)?.name ??
+          "未归档";
+        showToast(
+          `已移动 ${result.movedIds.length} 条历史记录到「${targetName}」`,
+        );
+      }
+      return result;
+    },
+    [projects, refreshHistory, selectedHistoryIds, showToast],
+  );
 
   const handleClearHistory = async () => {
     if (!history.length || !window.confirm("清空全部历史记录？此操作不可撤销。")) {
@@ -1372,6 +1479,7 @@ export default function App() {
           onCreateProject={() => setProjectEditor("new")}
           onEditProject={setProjectEditor}
           onSelectHistory={handleSelectHistory}
+          onMoveHistory={handleMoveHistory}
           onDeleteHistory={handleDeleteHistory}
           onClearHistory={handleClearHistory}
           onExport={handleExport}
@@ -1441,6 +1549,9 @@ export default function App() {
             error={error}
             onDismissError={() => setError("")}
             onStart={handleStart}
+            onDiscardAnalysis={handleDiscardAnalysis}
+            analysisCancelBusy={analysisCancelBusy}
+            hasDiscardableContent={Boolean(optimizedPrompt.trim())}
             onSubmitAnswers={handleSubmitAnswers}
             onNew={handleNew}
             onOpenVariableWorkflow={() => {

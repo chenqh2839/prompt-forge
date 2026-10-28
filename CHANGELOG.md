@@ -6,6 +6,22 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-10-28
+
+### Added
+
+- Single and multi-select history moves to an existing project or back to
+  unfiled, using one atomic SQLite transaction.
+- A project target picker with search and explicit origin-to-target
+  confirmation.
+- A cancel control during prompt analysis that stops the active request,
+  discards the round result, and preserves editable input.
+
+### Changed
+
+- Analysis requests now carry request IDs and are tracked by a cancellation
+  registry until completion.
+
 ## [0.10.2] - 2026-10-27
 
 ### Added

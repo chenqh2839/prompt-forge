@@ -4,7 +4,7 @@ Prompt Forge is a local-first desktop application for refining prompts through
 structured clarification. It is built with Tauri 2, React, TypeScript, Rust,
 and local SQLite.
 
-> Current source snapshot: **v0.10.2**
+> Current source snapshot: **v0.10.3**
 >
 > Distribution status: **Windows community preview**. The latest published
 > Windows binary is **v0.10.2**. macOS and Linux are not yet verified on real

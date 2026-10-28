@@ -49,6 +49,9 @@ interface PromptWorkspaceProps {
   error: string;
   onDismissError: () => void;
   onStart: () => void;
+  onDiscardAnalysis: () => void;
+  analysisCancelBusy: boolean;
+  hasDiscardableContent: boolean;
   onSubmitAnswers: () => void;
   onNew: () => void;
   onOpenVariableWorkflow: () => void;
@@ -89,6 +92,9 @@ export function PromptWorkspace({
   error,
   onDismissError,
   onStart,
+  onDiscardAnalysis,
+  analysisCancelBusy,
+  hasDiscardableContent,
   onSubmitAnswers,
   onNew,
   onOpenVariableWorkflow,
@@ -306,7 +312,25 @@ export function PromptWorkspace({
                   : "组装角色、任务、约束、输出格式与质量标准……"}
             </p>
           </div>
-          <span className="thinking-code">MODEL / PROCESSING</span>
+          <div className="thinking-actions">
+            <span className="thinking-code">MODEL / PROCESSING</span>
+            {stage === "analyzing" && (
+              <button
+                type="button"
+                className="discard-analysis-button"
+                onClick={onDiscardAnalysis}
+                disabled={analysisCancelBusy}
+                title={
+                  hasDiscardableContent
+                    ? "放弃本轮分析并丢弃已生成的内容"
+                    : "放弃本轮分析并保留已输入内容"
+                }
+              >
+                <X size={14} />
+                {analysisCancelBusy ? "正在放弃…" : "放弃本轮分析"}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
