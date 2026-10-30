@@ -1,10 +1,10 @@
-name: Validate v0.10.2
+name: Validate v0.10.3
 
 on:
   push:
     branches:
       - "main"
-      - "v0.10.2-*"
+      - "v0.10.3-*"
   pull_request:
   workflow_dispatch:
 
@@ -15,6 +15,8 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/source/src-tauri/target
 
     steps:
       - name: Checkout
@@ -64,12 +66,12 @@ jobs:
 
       - name: Build Windows release bundle
         working-directory: source
-        run: pnpm desktop:build
+        run: pnpm tauri build --config src-tauri/tauri.ci.conf.json
 
       - name: Upload Windows release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: prompt-forge-v0.10.2-windows-x64
+          name: prompt-forge-v0.10.3-windows-x64
           path: |
             source/src-tauri/target/release/*.exe
             source/src-tauri/target/release/*.dll

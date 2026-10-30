@@ -7,7 +7,7 @@ and local SQLite.
 > Current source snapshot: **v0.10.3**
 >
 > Distribution status: **Windows community preview**. The latest published
-> Windows binary is **v0.10.2**. macOS and Linux are not yet verified on real
+> Windows binary is **v0.10.3**. macOS and Linux are not yet verified on real
 > hardware and do not have an official release binary.
 
 ## Repository layout
@@ -25,6 +25,10 @@ The application README is available at
 - Reuse of matching project roles and technical context without repeating a
   standalone role declaration; this can be disabled in Settings.
 - Prompt refinement, regeneration, and revision workflows.
+- Single-record and multi-select history moves between projects or back to
+  unfiled, without duplicating or deleting the history entries.
+- Discard the active analysis round, abort its request, and return to the
+  editable prompt while preserving the original input and context.
 - Project context, selected history summaries, and context-budget handling.
 - Project interactions can be converted into reusable prompt templates.
 - Reusable variable prompt templates with ordered sections.
@@ -39,8 +43,8 @@ The application README is available at
 
 | Platform | Status |
 |---|---|
-| Windows 11 x64 | v0.10.2 install, upgrade, launch, data migration, SQLite, and UI checks completed on local hardware |
-| Windows 10 x64 | Earlier install and launch smoke tests only; v0.10.2 was not separately retested |
+| Windows 11 x64 | v0.10.3 install, uninstall, launch, SQLite, and UI checks completed on local hardware |
+| Windows 10 x64 | Earlier install and launch smoke tests only; v0.10.3 was not separately retested |
 | macOS | Source compatibility only; not covered by the current release CI or run on real hardware |
 | Linux | Source compatibility only; not covered by the current release CI or run on real hardware |
 
@@ -54,14 +58,15 @@ Download the latest published Windows archive from
 
 1. Extract the Windows ZIP attached to the latest available Release.
 2. To install, run the versioned NSIS setup executable in `安装版`.
-3. To use the portable build, run `Prompt Forge.exe`. The v0.10.2 build uses a
+3. To use the portable build, run `Prompt Forge.exe`. The v0.10.3 build uses a
    static WebView2 loader and does not require a separate `WebView2Loader.dll`.
 
 Microsoft Edge WebView2 Runtime is required.
 
 The current installer is not Authenticode-signed. Windows SmartScreen may show
 an "Unknown publisher" warning. Verify the release ZIP with
-`SHA256SUMS-v0.10.2.txt`; the extracted archive also contains its own
+`SHA256SUMS-v0.10.3.txt`; it covers the portable executable, NSIS installer,
+and ZIP. The extracted archive also contains its own
 `SHA256SUMS.txt` for individual files. SHA-256 verification confirms file
 integrity, not publisher identity.
 

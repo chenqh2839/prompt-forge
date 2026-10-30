@@ -22,8 +22,19 @@
 - 前端生产构建通过。
 - Rust Clippy 通过。
 - 39 个 Rust 单元测试通过。
-- Windows 11 x64 完成本机构建、静默安装、启动和 UI 版本验证。
+- Windows 11 x64 完成本机构建、静默安装、静默卸载、重装恢复、启动和 UI 版本验证。
 - 真实界面完成单条移动、批量移动、未归档移动、分析取消和取消后重新分析。
+
+## 发布资产与校验
+
+| 资产 | SHA-256 |
+|---|---|
+| `prompt-forge.exe` | `07fd71db2f6adf8d3cbd359056817ec02200290b402ecdd77cfde0ed6e6a4445` |
+| `Prompt.Forge_0.10.3_x64-setup.exe` | `38ba9be115a2b67e51f453c9232a848fc38a7eb492bf51f7994e05e3b2965cf2` |
+| `PromptForge-0.10.3-Windows-x64.zip` | `8fcf16522664b774487a0cc0eaca56de7fb32c995a37bbfd9437bd4b636e4f54` |
+
+`SHA256SUMS-v0.10.3.txt` 覆盖以上三个二进制资产。GitHub 可能将 NSIS
+文件名中的空格规范化为点。
 
 ## 已知限制
 
