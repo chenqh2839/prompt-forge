@@ -15,8 +15,6 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 45
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/source/src-tauri/target
 
     steps:
       - name: Checkout
@@ -66,7 +64,7 @@ jobs:
 
       - name: Build Windows release bundle
         working-directory: source
-        run: pnpm tauri build --config src-tauri/tauri.ci.conf.json
+        run: pnpm desktop:build
 
       - name: Upload Windows release bundle
         uses: actions/upload-artifact@v4
