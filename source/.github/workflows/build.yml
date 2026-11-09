@@ -25,6 +25,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+      PROMPT_FORGE_DIST_DIR: ${{ github.workspace }}/dist
+      PROMPT_FORGE_VITE_CACHE_DIR: ${{ github.workspace }}/node_modules/.vite
 
     steps:
       - uses: actions/checkout@v4

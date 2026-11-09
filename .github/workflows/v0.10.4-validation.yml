@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 45
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/source/src-tauri/target
+      PROMPT_FORGE_DIST_DIR: ${{ github.workspace }}/source/dist
+      PROMPT_FORGE_VITE_CACHE_DIR: ${{ github.workspace }}/source/node_modules/.vite
 
     steps:
       - name: Checkout
