@@ -20,6 +20,7 @@ import type {
   AppSettings,
   ClarificationQuestion,
   ClarificationTurn,
+  CodexContextSelection,
   HistoryItem,
   MoveHistoryResult,
   PromptAttachment,
@@ -45,6 +46,7 @@ import { ProjectDialog } from "./components/ProjectDialog";
 import { VariableWorkflowDialog } from "./components/VariableWorkflowDialog";
 import { ProjectHistorySources } from "./components/ProjectHistorySources";
 import { ReplyAssistant } from "./components/ReplyAssistant";
+import { CodexContextDialog } from "./components/CodexContextDialog";
 import { BrandMark } from "./components/BrandMark";
 import {
   attachmentPayloads,
@@ -125,6 +127,9 @@ export default function App() {
   );
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [codexContextOpen, setCodexContextOpen] = useState(false);
+  const [codexContextSelection, setCodexContextSelection] =
+    useState<CodexContextSelection | null>(null);
   const [customTemplates, setCustomTemplates] = useState<
     TemplateDefinition[]
   >([]);
@@ -532,6 +537,9 @@ export default function App() {
           ...(activeProject
             ? { projectContext: projectPayload(activeProject) }
             : {}),
+          ...(codexContextSelection
+            ? { codexContext: codexContextSelection }
+            : {}),
           rounds: transcriptRounds.map((turn) => ({
             round: turn.round,
             turns: turn.questions.map((question) => ({
@@ -588,6 +596,7 @@ export default function App() {
       handleComplete,
       originalPrompt,
       projectInteractionPayload,
+      codexContextSelection,
     ],
   );
 
@@ -736,6 +745,9 @@ export default function App() {
           ...(activeProject
             ? { projectContext: projectPayload(activeProject) }
             : {}),
+          ...(codexContextSelection
+            ? { codexContext: codexContextSelection }
+            : {}),
           variableContext: {
             workflowName: workflow.name,
             values: workflow.variables.map((variable) => ({
@@ -876,6 +888,9 @@ export default function App() {
         ...(activeProject
           ? { projectContext: projectPayload(activeProject) }
           : {}),
+          ...(codexContextSelection
+            ? { codexContext: codexContextSelection }
+            : {}),
         rounds: rounds.map((turn) => ({
           round: turn.round,
           turns: turn.questions.map((question) => ({
@@ -927,6 +942,9 @@ export default function App() {
         ...(activeProject
           ? { projectContext: projectPayload(activeProject) }
           : {}),
+          ...(codexContextSelection
+            ? { codexContext: codexContextSelection }
+            : {}),
         ...(selectedVariant && variableWorkflow
           ? {
               variableContext: {
@@ -1534,6 +1552,12 @@ export default function App() {
               />
             }
             interactionContextReady={interactionContextReady}
+            codexContextSummary={
+              codexContextSelection
+                ? `${codexContextSelection.threadIds.length} 个会话 · ${codexContextSelection.skillIds.length} 个 skills`
+                : ""
+            }
+            onOpenCodexContext={() => setCodexContextOpen(true)}
             visionSupported={visionSupported}
             model={settings.model}
             keepAttachmentsAfterSubmit={keepAttachmentsAfterSubmit}
@@ -1591,6 +1615,23 @@ export default function App() {
             setSettings(nextSettings);
             setSettingsOpen(false);
             showToast("模型配置已保存");
+          }}
+        />
+      )}
+
+      {codexContextOpen && (
+        <CodexContextDialog
+          originalPrompt={originalPrompt}
+          initialSelection={codexContextSelection}
+          onClose={() => setCodexContextOpen(false)}
+          onApply={(selection) => {
+            setCodexContextSelection(selection);
+            setCodexContextOpen(false);
+            showToast(
+              selection
+                ? "Codex 上下文已应用，下次分析时生效"
+                : "已清除 Codex 上下文",
+            );
           }}
         />
       )}

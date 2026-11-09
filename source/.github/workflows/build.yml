@@ -23,6 +23,8 @@ jobs:
             bundle: src-tauri/target/release/bundle
 
     runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
 
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +68,7 @@ jobs:
         run: cargo test
 
       - name: Tauri build
-        run: pnpm desktop:build
+        run: pnpm tauri build --config src-tauri/tauri.ci.conf.json
 
       - name: Upload installers
         uses: actions/upload-artifact@v4

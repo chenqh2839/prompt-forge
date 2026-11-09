@@ -207,6 +207,7 @@ export interface AnalyzeRequest {
   variableContext?: VariableRunContext;
   attachments?: AttachmentPayload[];
   projectInteractionContext?: ProjectInteractionContext;
+  codexContext?: CodexContextSelection;
   rounds: Array<{
     round: number;
     turns: Array<{
@@ -216,6 +217,139 @@ export interface AnalyzeRequest {
     }>;
   }>;
   forceGenerate: boolean;
+}
+
+export interface CodexPreferences {
+  enabled: boolean;
+  watchEnabled: boolean;
+}
+
+export interface CodexDiagnostic {
+  code: string;
+  level: string;
+  message: string;
+}
+
+export interface CodexProject {
+  id: string;
+  name: string;
+  rootPaths: string[];
+}
+
+export interface CodexAssociation {
+  projectId?: string | null;
+  confidence: number;
+  level: "high" | "medium" | "low" | "unresolved" | string;
+  reasons: string[];
+  manual: boolean;
+}
+
+export interface CodexThread {
+  id: string;
+  title: string;
+  updatedAt: number;
+  cwd: string;
+  archived: boolean;
+  source: string;
+  rolloutPath: string;
+  rolloutFormat: "jsonl" | "zstd" | string;
+  association: CodexAssociation;
+  compactionSummary: string;
+  indexedOffset: number;
+  indexStatus: "indexed" | "pending" | string;
+}
+
+export interface CodexDiscovery {
+  home: string;
+  projects: CodexProject[];
+  threads: CodexThread[];
+  diagnostics: CodexDiagnostic[];
+}
+
+export interface CodexQuery {
+  search?: string;
+  fromMs?: number | null;
+  toMs?: number | null;
+  includeArchived?: boolean;
+}
+
+export interface CodexContextSelection {
+  projectId?: string | null;
+  threadIds: string[];
+  includeProjectFiles: boolean;
+  includeToolOutputs: boolean;
+  includeArchived: boolean;
+  search?: string;
+  fromMs?: number | null;
+  toMs?: number | null;
+  skillIds: string[];
+}
+
+export interface CodexSkillDescriptor {
+  id: string;
+  name: string;
+  pluginId?: string | null;
+  description: string;
+  triggers: string[];
+  sourcePath: string;
+  sourceKind: string;
+  version?: string | null;
+}
+
+export interface CodexSkillMatch {
+  skill: CodexSkillDescriptor;
+  score: number;
+  confidence: "high" | "medium" | "low" | "manual" | string;
+  reason: string;
+}
+
+export interface CodexSkillRerankResult {
+  candidates: CodexSkillMatch[];
+  usedModelRerank: boolean;
+  fallback: boolean;
+  warning?: string | null;
+}
+
+export interface CodexReadManifest {
+  path: string;
+  bytesRead: number;
+  includedChars: number;
+  omitted: boolean;
+}
+
+export interface CodexInjectionPreview {
+  originalPrompt: string;
+  injectedPrompt: string;
+  contextText: string;
+  skillBlock: string;
+  skillMatches: CodexSkillMatch[];
+  filesRead: CodexReadManifest[];
+  diagnostics: CodexDiagnostic[];
+  hasSkillBlock: boolean;
+}
+
+export interface CodexWatchStatus {
+  enabled: boolean;
+  changedFiles: number;
+}
+
+export interface CodexFavorite {
+  id: string;
+  name: string;
+  projectId?: string | null;
+  threadIds: string[];
+  skillIds: string[];
+  metadata: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface CodexFavoriteInput {
+  id?: string;
+  name: string;
+  projectId?: string | null;
+  threadIds: string[];
+  skillIds: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface VariableRunContext {

@@ -459,7 +459,7 @@ export function Sidebar({
 
         <div className="sidebar-foot">
           <span>PF / LOCAL STUDIO</span>
-          <span>v0.10.3</span>
+          <span>v0.10.4</span>
         </div>
       </aside>
       {moveRequestIds.length > 0 && (

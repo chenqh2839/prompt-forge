@@ -3,18 +3,26 @@ param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
 
     [Parameter(Mandatory = $false)]
-    [string]$CargoAboutPath
+    [string]$CargoAboutPath,
+
+    [Parameter(Mandatory = $false)]
+    [string]$BuildRoot
 )
 
 $ErrorActionPreference = "Stop"
 $sourceRoot = Join-Path $RepoRoot "source"
 $cargoRoot = Join-Path $sourceRoot "src-tauri"
-$logsRoot = Join-Path $RepoRoot "logs"
+if (-not $BuildRoot) {
+    $BuildRoot = Join-Path (Split-Path -Parent $RepoRoot) "提示词优化\PromptForge-Build"
+}
+$logsRoot = Join-Path $BuildRoot "logs"
 $outputPath = Join-Path $RepoRoot "THIRD-PARTY-NOTICES.md"
-$npmJson = Join-Path $logsRoot "npm-licenses-all.json"
-$rustNotices = Join-Path $logsRoot "rust-notices-generated.md"
+$runId = "$(Get-Date -Format 'yyyyMMdd-HHmmss')-$([guid]::NewGuid().ToString('N'))"
+$runLogsRoot = Join-Path $logsRoot "runs\$runId"
+$npmJson = Join-Path $runLogsRoot "npm-licenses-all.json"
+$rustNotices = Join-Path $runLogsRoot "rust-notices-generated.md"
 
-New-Item -ItemType Directory -Path $logsRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $runLogsRoot -Force | Out-Null
 
 function Normalize-LicenseText([string]$Text) {
     $normalized = (($Text -replace "`r`n", "`n") -split "`n" |
@@ -33,7 +41,7 @@ if (-not $CargoAboutPath) {
     if ($cargoAboutCommand) {
         $CargoAboutPath = $cargoAboutCommand.Source
     } else {
-        $bundled = Join-Path $RepoRoot "logs\tools\cargo-about\cargo-about-0.9.2-x86_64-pc-windows-msvc\cargo-about.exe"
+        $bundled = Join-Path $logsRoot "tools\cargo-about\cargo-about-0.9.2-x86_64-pc-windows-msvc\cargo-about.exe"
         if (Test-Path -LiteralPath $bundled) {
             $CargoAboutPath = $bundled
         }

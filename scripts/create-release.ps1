@@ -3,16 +3,22 @@ param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
 
     [Parameter(Mandatory = $false)]
-    [string]$Tag = "v0.10.1",
+    [string]$Tag = "v0.10.4",
 
     [Parameter(Mandatory = $false)]
-    [string]$Title = "Prompt Forge v0.10.1 - Windows x64"
+    [string]$Title = "Prompt Forge v0.10.4 - Windows x64",
+
+    [Parameter(Mandatory = $false)]
+    [string]$BuildRoot
 )
 
 $ErrorActionPreference = "Stop"
-$assetName = "PromptForge-0.10.1-Windows-x64.zip"
-$asset = Join-Path $RepoRoot "release-assets\$assetName"
-$checksums = Join-Path $RepoRoot "release\SHA256SUMS.txt"
+if (-not $BuildRoot) {
+    $BuildRoot = Join-Path (Split-Path -Parent $RepoRoot) "提示词优化\PromptForge-Build"
+}
+$assetName = "PromptForge-0.10.4-Windows-x64.zip"
+$asset = Join-Path $BuildRoot "release-assets\$assetName"
+$checksums = Join-Path $BuildRoot "release-assets\SHA256SUMS-0.10.4.txt"
 $notes = Join-Path $RepoRoot "release\RELEASE_NOTES.md"
 $gh = "C:\Program Files\GitHub CLI\gh.exe"
 

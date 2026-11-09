@@ -7,7 +7,11 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+mod codex_index;
+mod codex_watch;
 mod data_location;
+mod role_evidence;
+mod skill_rerank;
 
 use keyring::Entry;
 use reqwest::{StatusCode, Url};
@@ -32,13 +36,18 @@ const ANALYSIS_CANCELLED_ERROR: &str = "本轮分析已放弃。";
 struct AppState {
     db_path: PathBuf,
     analysis_cancellations: AnalysisCancellationRegistry,
+    codex_home: Option<PathBuf>,
+    codex_watch: codex_watch::CodexWatchController,
 }
 
 impl AppState {
     fn new(db_path: PathBuf) -> Self {
+        let codex_home = codex_index::default_codex_home();
         Self {
             db_path,
             analysis_cancellations: AnalysisCancellationRegistry::default(),
+            codex_home,
+            codex_watch: codex_watch::CodexWatchController::default(),
         }
     }
 }
@@ -127,8 +136,68 @@ struct AnalyzeRequest {
     attachments: Vec<AttachmentInput>,
     #[serde(default)]
     project_interaction_context: Option<ProjectInteractionContext>,
+    #[serde(default)]
+    codex_context: Option<CodexContextInput>,
     rounds: Vec<TranscriptRound>,
     force_generate: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexContextInput {
+    #[serde(default)]
+    project_id: Option<String>,
+    #[serde(default)]
+    thread_ids: Vec<String>,
+    #[serde(default)]
+    include_project_files: bool,
+    #[serde(default)]
+    include_tool_outputs: bool,
+    #[serde(default)]
+    include_archived: bool,
+    #[serde(default)]
+    search: String,
+    #[serde(default)]
+    from_ms: Option<i64>,
+    #[serde(default)]
+    to_ms: Option<i64>,
+    #[serde(default)]
+    skill_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexPreferences {
+    enabled: bool,
+    watch_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexFavorite {
+    id: String,
+    name: String,
+    project_id: Option<String>,
+    thread_ids: Vec<String>,
+    skill_ids: Vec<String>,
+    metadata: Value,
+    created_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexFavoriteInput {
+    #[serde(default)]
+    id: Option<String>,
+    name: String,
+    #[serde(default)]
+    project_id: Option<String>,
+    #[serde(default)]
+    thread_ids: Vec<String>,
+    #[serde(default)]
+    skill_ids: Vec<String>,
+    #[serde(default)]
+    metadata: Value,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -763,6 +832,26 @@ fn open_db(state: &AppState) -> Result<Connection, String> {
                 summaries_json TEXT NOT NULL,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS codex_thread_index (
+                thread_id TEXT PRIMARY KEY NOT NULL,
+                rollout_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                modified_ns INTEGER NOT NULL,
+                sha256 TEXT NOT NULL,
+                indexed_offset INTEGER NOT NULL,
+                compaction_summary TEXT NOT NULL DEFAULT '',
+                diagnostics_json TEXT NOT NULL DEFAULT '[]',
+                last_indexed_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS codex_favorites (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                project_id TEXT,
+                thread_ids_json TEXT NOT NULL DEFAULT '[]',
+                skill_ids_json TEXT NOT NULL DEFAULT '[]',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY NOT NULL,
                 name TEXT NOT NULL,
@@ -782,6 +871,8 @@ fn open_db(state: &AppState) -> Result<Connection, String> {
                 ON variable_templates(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_project_history_summaries_project
                 ON project_history_summaries(project_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_codex_favorites_created_at
+                ON codex_favorites(created_at DESC);
             "#,
         )
         .map_err(|error| format!("初始化本地数据库失败：{error}"))?;
@@ -1100,6 +1191,391 @@ fn reuse_project_role_from_store(state: &AppState) -> Result<bool, String> {
         .unwrap_or(true))
 }
 
+fn codex_home(state: &AppState) -> Result<PathBuf, String> {
+    state
+        .codex_home
+        .clone()
+        .ok_or_else(|| "PF-CX-001 未找到本机 Codex 数据目录。".to_string())
+}
+
+fn codex_preferences_from_conn(conn: &Connection) -> CodexPreferences {
+    CodexPreferences {
+        enabled: get_setting(conn, "codex_context_enabled", "false")
+            .parse::<bool>()
+            .unwrap_or(false),
+        watch_enabled: get_setting(conn, "codex_watch_enabled", "false")
+            .parse::<bool>()
+            .unwrap_or(false),
+    }
+}
+
+fn codex_context_enabled_from_store(state: &AppState) -> Result<bool, String> {
+    let conn = open_db(state)?;
+    Ok(codex_preferences_from_conn(&conn).enabled)
+}
+
+fn load_codex_bundle(
+    state: &AppState,
+    selection: &CodexContextInput,
+) -> Result<codex_index::CodexContextBundle, String> {
+    let home = codex_home(state)?;
+    let mut conn = open_db(state)?;
+    let preferences = codex_preferences_from_conn(&conn);
+    if !preferences.enabled {
+        return Ok(codex_index::CodexContextBundle::default());
+    }
+    let query = codex_index::CodexQuery {
+        search: selection.search.clone(),
+        from_ms: selection.from_ms,
+        to_ms: selection.to_ms,
+        include_archived: selection.include_archived,
+    };
+    let codex_selection = codex_index::CodexContextSelection {
+        project_id: selection.project_id.clone(),
+        thread_ids: selection.thread_ids.clone(),
+        include_project_files: selection.include_project_files,
+        include_tool_outputs: selection.include_tool_outputs,
+        include_archived: selection.include_archived,
+    };
+    codex_index::build_context(&home, &mut conn, &query, &codex_selection, 12_000)
+}
+
+fn resolve_selected_skills(
+    state: &AppState,
+    skill_ids: &[String],
+    disabled_plugin_ids: &[String],
+) -> Result<Vec<skill_rerank::SkillMatch>, String> {
+    if skill_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let home = codex_home(state)?;
+    let conn = open_db(state)?;
+    let discovery = codex_index::discover(&home, &conn, &codex_index::CodexQuery::default())?;
+    let roots = discovery
+        .projects
+        .iter()
+        .flat_map(|project| project.root_paths.clone())
+        .collect::<Vec<_>>();
+    let (skills, _) = skill_rerank::discover_skills(&home, &roots);
+    let mut selected = Vec::new();
+    for id in skill_ids {
+        let Some(skill) = skills.iter().find(|skill| &skill.id == id) else {
+            continue;
+        };
+        if skill.plugin_id.as_ref().is_some_and(|plugin| {
+            disabled_plugin_ids
+                .iter()
+                .any(|disabled| disabled == plugin)
+        }) {
+            continue;
+        }
+        selected.push(skill_rerank::SkillMatch {
+            skill: skill.clone(),
+            score: 1.0,
+            confidence: "manual".to_string(),
+            reason: "用户在 Prompt Forge 中明确选择".to_string(),
+        });
+    }
+    Ok(selected)
+}
+
+#[tauri::command]
+fn get_codex_preferences(state: State<'_, AppState>) -> Result<CodexPreferences, String> {
+    let conn = open_db(&state)?;
+    let mut preferences = codex_preferences_from_conn(&conn);
+    preferences.watch_enabled = state.codex_watch.status().enabled;
+    Ok(preferences)
+}
+
+#[tauri::command]
+fn save_codex_preferences(
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<CodexPreferences, String> {
+    if !enabled {
+        state.codex_watch.stop()?;
+    }
+    let conn = open_db(&state)?;
+    set_setting(
+        &conn,
+        "codex_context_enabled",
+        if enabled { "true" } else { "false" },
+    )?;
+    Ok(codex_preferences_from_conn(&conn))
+}
+
+#[tauri::command]
+fn codex_discover(
+    query: codex_index::CodexQuery,
+    state: State<'_, AppState>,
+) -> Result<codex_index::CodexDiscovery, String> {
+    let home = codex_home(&state)?;
+    let conn = open_db(&state)?;
+    codex_index::discover(&home, &conn, &query)
+}
+
+#[tauri::command]
+fn codex_index_threads(
+    thread_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let home = codex_home(&state)?;
+    let mut conn = open_db(&state)?;
+    let discovery = codex_index::discover(
+        &home,
+        &conn,
+        &codex_index::CodexQuery {
+            include_archived: true,
+            ..codex_index::CodexQuery::default()
+        },
+    )?;
+    let selected = thread_ids
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    let mut results = Vec::new();
+    for thread in discovery
+        .threads
+        .iter()
+        .filter(|thread| selected.contains(&thread.id))
+    {
+        let (_, status) = codex_index::index_thread(&mut conn, thread)?;
+        results.push(format!("{}:{}", thread.id, status));
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+fn codex_match_skills(
+    task: String,
+    thread_ids: Vec<String>,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<skill_rerank::SkillRerankResult, String> {
+    let home = codex_home(&state)?;
+    let conn = open_db(&state)?;
+    let discovery = codex_index::discover(
+        &home,
+        &conn,
+        &codex_index::CodexQuery {
+            include_archived: true,
+            ..codex_index::CodexQuery::default()
+        },
+    )?;
+    let roots = discovery
+        .projects
+        .iter()
+        .flat_map(|project| project.root_paths.clone())
+        .collect::<Vec<_>>();
+    let (skills, warnings) = skill_rerank::discover_skills(&home, &roots);
+    let selected = thread_ids
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    let mut disabled = Vec::new();
+    for thread in discovery
+        .threads
+        .iter()
+        .filter(|thread| selected.contains(&thread.id))
+    {
+        if let Ok(parsed) = codex_index::parse_rollout(Path::new(&thread.rollout_path), 32) {
+            for id in parsed.disabled_plugin_ids {
+                if !disabled.iter().any(|item| item == &id) {
+                    disabled.push(id);
+                }
+            }
+        }
+    }
+    let candidates = skill_rerank::local_candidates(&task, &skills, &disabled, limit.unwrap_or(8));
+    Ok(skill_rerank::SkillRerankResult {
+        candidates,
+        used_model_rerank: false,
+        fallback: false,
+        warning: (!warnings.is_empty()).then(|| warnings.join("；")),
+    })
+}
+
+#[tauri::command]
+async fn codex_rerank_skills(
+    task: String,
+    candidates: Vec<skill_rerank::SkillMatch>,
+    state: State<'_, AppState>,
+) -> Result<skill_rerank::SkillRerankResult, String> {
+    if candidates.len() < 2 {
+        return Ok(skill_rerank::SkillRerankResult {
+            candidates,
+            used_model_rerank: false,
+            fallback: false,
+            warning: None,
+        });
+    }
+    let result = async {
+        let config = config_from_store(&state)?;
+        send_chat(
+            &config,
+            vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: json!("You are a conservative Codex skill router. Return JSON only."),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: json!(skill_rerank::rerank_prompt(&task, &candidates)),
+                },
+            ],
+            500,
+        )
+        .await
+    }
+    .await;
+    match result {
+        Ok(response) => match skill_rerank::parse_rerank_ids(&response.content, &candidates) {
+            Ok(selected) => Ok(skill_rerank::SkillRerankResult {
+                candidates: selected,
+                used_model_rerank: true,
+                fallback: false,
+                warning: None,
+            }),
+            Err(error) => Ok(skill_rerank::fallback_result(candidates, error)),
+        },
+        Err(error) => Ok(skill_rerank::fallback_result(
+            candidates,
+            format!("PF-CX-013 模型重排不可用，已回退本地评分：{error}"),
+        )),
+    }
+}
+
+#[tauri::command]
+fn codex_preview_injection(
+    original_prompt: String,
+    selection: CodexContextInput,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let bundle = load_codex_bundle(&state, &selection)?;
+    let selected =
+        resolve_selected_skills(&state, &selection.skill_ids, &bundle.disabled_plugin_ids)?;
+    let skill_lines = skill_rerank::skill_instruction_lines(&selected);
+    let injected = role_evidence::inject_skill_block(&original_prompt, &skill_lines);
+    Ok(json!({
+        "originalPrompt": original_prompt,
+        "injectedPrompt": injected,
+        "contextText": bundle.segments.iter().map(|segment| {
+            format!("### {}\n{}", segment.source_label, segment.text)
+        }).collect::<Vec<_>>().join("\n\n"),
+        "skillBlock": skill_lines.join("\n"),
+        "skillMatches": selected,
+        "filesRead": bundle.files_read,
+        "diagnostics": bundle.diagnostics,
+        "hasSkillBlock": !skill_lines.is_empty()
+    }))
+}
+
+#[tauri::command]
+fn codex_watch_status(state: State<'_, AppState>) -> Result<codex_watch::CodexWatchStatus, String> {
+    Ok(state.codex_watch.status())
+}
+
+#[tauri::command]
+fn codex_set_watch(
+    enabled: bool,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<codex_watch::CodexWatchStatus, String> {
+    let status = if enabled {
+        state.codex_watch.start(codex_home(&state)?, app)?
+    } else {
+        state.codex_watch.stop()?
+    };
+    let conn = open_db(&state)?;
+    set_setting(
+        &conn,
+        "codex_watch_enabled",
+        if enabled { "true" } else { "false" },
+    )?;
+    Ok(status)
+}
+
+#[tauri::command]
+fn list_codex_favorites(state: State<'_, AppState>) -> Result<Vec<CodexFavorite>, String> {
+    let conn = open_db(&state)?;
+    let mut statement = conn
+        .prepare(
+            "SELECT id, name, project_id, thread_ids_json, skill_ids_json,
+                    metadata_json, created_at
+             FROM codex_favorites ORDER BY created_at DESC",
+        )
+        .map_err(|error| format!("PF-CX-015 读取 Codex 收藏失败：{error}"))?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(CodexFavorite {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                project_id: row.get(2)?,
+                thread_ids: serde_json::from_str(&row.get::<_, String>(3)?).unwrap_or_default(),
+                skill_ids: serde_json::from_str(&row.get::<_, String>(4)?).unwrap_or_default(),
+                metadata: serde_json::from_str(&row.get::<_, String>(5)?)
+                    .unwrap_or_else(|_| json!({})),
+                created_at: row.get(6)?,
+            })
+        })
+        .map_err(|error| format!("PF-CX-015 查询 Codex 收藏失败：{error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("PF-CX-015 解析 Codex 收藏失败：{error}"))
+}
+
+#[tauri::command]
+fn save_codex_favorite(
+    input: CodexFavoriteInput,
+    state: State<'_, AppState>,
+) -> Result<CodexFavorite, String> {
+    let name = input.name.trim();
+    if name.is_empty() || name.chars().count() > 80 {
+        return Err("PF-CX-015 收藏名称需要包含 1–80 个字符。".to_string());
+    }
+    if input.thread_ids.len() > 30 || input.skill_ids.len() > 8 {
+        return Err("PF-CX-015 收藏引用数量超过限制。".to_string());
+    }
+    let conn = open_db(&state)?;
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let created_at = now_seconds();
+    conn.execute(
+        "INSERT INTO codex_favorites(
+            id, name, project_id, thread_ids_json, skill_ids_json, metadata_json, created_at
+         ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            project_id = excluded.project_id,
+            thread_ids_json = excluded.thread_ids_json,
+            skill_ids_json = excluded.skill_ids_json,
+            metadata_json = excluded.metadata_json",
+        params![
+            id,
+            name,
+            input.project_id,
+            serde_json::to_string(&input.thread_ids).unwrap_or_else(|_| "[]".to_string()),
+            serde_json::to_string(&input.skill_ids).unwrap_or_else(|_| "[]".to_string()),
+            serde_json::to_string(&input.metadata).unwrap_or_else(|_| "{}".to_string()),
+            created_at,
+        ],
+    )
+    .map_err(|error| format!("PF-CX-015 保存 Codex 收藏失败：{error}"))?;
+    Ok(CodexFavorite {
+        id,
+        name: name.to_string(),
+        project_id: input.project_id,
+        thread_ids: input.thread_ids,
+        skill_ids: input.skill_ids,
+        metadata: input.metadata,
+        created_at,
+    })
+}
+
+#[tauri::command]
+fn delete_codex_favorite(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    let conn = open_db(&state)?;
+    conn.execute("DELETE FROM codex_favorites WHERE id = ?1", params![id])
+        .map_err(|error| format!("PF-CX-015 删除 Codex 收藏失败：{error}"))?;
+    Ok(())
+}
+
 fn endpoint_for(base_url: &str) -> String {
     let trimmed = base_url.trim().trim_end_matches('/');
     if trimmed.ends_with("/chat/completions") {
@@ -1231,6 +1707,9 @@ struct PromptContextBundle {
     text: String,
     has_context: bool,
     truncated: bool,
+    role_evidence: role_evidence::RoleEvidence,
+    conflicts: Vec<role_evidence::ContextConflict>,
+    source_refs: Vec<role_evidence::SourceReference>,
 }
 
 fn normalized_context_key(value: &str) -> String {
@@ -1258,8 +1737,23 @@ fn add_context_entry(entries: &mut Vec<(String, String)>, label: &str, value: &s
     entries.push((label.to_string(), value.to_string()));
 }
 
-fn build_prompt_context(request: &AnalyzeRequest) -> PromptContextBundle {
+fn build_prompt_context(
+    request: &AnalyzeRequest,
+    codex_bundle: Option<&codex_index::CodexContextBundle>,
+) -> PromptContextBundle {
     let mut entries = Vec::new();
+    let mut role_facts = Vec::new();
+    let mut source_refs = Vec::new();
+    let manual_source = role_evidence::SourceReference {
+        source_type: "prompt_forge_manual".to_string(),
+        source_id: "manual-background".to_string(),
+        label: "用户手动粘贴的背景".to_string(),
+    };
+    role_facts.extend(role_evidence::infer_role_facts(
+        &request.background_context,
+        manual_source.clone(),
+    ));
+    source_refs.push(manual_source.clone());
     add_context_entry(
         &mut entries,
         "用户手动粘贴的背景",
@@ -1287,6 +1781,45 @@ fn build_prompt_context(request: &AnalyzeRequest) -> PromptContextBundle {
         add_context_entry(&mut entries, "项目角色", &project.characters);
         add_context_entry(&mut entries, "前情与已确认决策", &project.history_context);
         add_context_entry(&mut entries, "项目素材", &project.materials);
+        let project_source = role_evidence::SourceReference {
+            source_type: "prompt_forge_project".to_string(),
+            source_id: project.name.clone(),
+            label: format!("Prompt Forge 项目「{}」", project.name),
+        };
+        if !project.characters.trim().is_empty() {
+            role_facts.push(role_evidence::RoleFact {
+                field: "role".to_string(),
+                value: project.characters.clone(),
+                source: project_source.clone(),
+            });
+        }
+        for text in [
+            &project.goal,
+            &project.style,
+            &project.history_context,
+            &project.materials,
+        ] {
+            role_facts.extend(role_evidence::infer_role_facts(
+                text,
+                project_source.clone(),
+            ));
+        }
+        source_refs.push(project_source);
+    }
+    if let Some(bundle) = codex_bundle {
+        for segment in &bundle.segments {
+            add_context_entry(
+                &mut entries,
+                &format!("Codex 上下文 · {}", segment.source_label),
+                &segment.text,
+            );
+            let source = codex_index::source_reference(segment);
+            role_facts.extend(role_evidence::infer_role_facts(
+                &segment.text,
+                source.clone(),
+            ));
+            source_refs.push(source);
+        }
     }
 
     let has_context = !entries.is_empty();
@@ -1309,10 +1842,27 @@ fn build_prompt_context(request: &AnalyzeRequest) -> PromptContextBundle {
         joined
     };
 
+    let role_result = role_evidence::build_role_evidence(&role_facts);
+    source_refs.extend(role_result.evidence.sources.clone());
+    let mut deduped_sources = Vec::new();
+    for source in source_refs {
+        if !deduped_sources
+            .iter()
+            .any(|existing: &role_evidence::SourceReference| {
+                existing.source_type == source.source_type && existing.source_id == source.source_id
+            })
+        {
+            deduped_sources.push(source);
+        }
+    }
+
     PromptContextBundle {
         text,
         has_context,
         truncated,
+        role_evidence: role_result.evidence,
+        conflicts: role_result.conflicts,
+        source_refs: deduped_sources,
     }
 }
 
@@ -1323,8 +1873,11 @@ fn role_policy(reuse_project_role: bool, context: &PromptContextBundle) -> &'sta
     if !context.has_context {
         return "ROLE POLICY:\n- No merged project/manual background was provided. Include a concise Role module appropriate for the current task.\n- Return roleDecision as one short line in the user's language explaining that no reusable role context was available.";
     }
+    if !context.role_evidence.complete {
+        return "ROLE POLICY:\n- Background exists, but no sufficiently clear role, domain, or technical-stack evidence was retained. Include a normal Role module for the current task.\n- Return roleDecision as one short line in the user's language explaining that no reusable role evidence was complete.";
+    }
     if context.truncated {
-        return "ROLE POLICY:\n- The merged background exceeded the safety limit and was truncated. Do not infer a role from the truncated context. Include a normal Role module for the current task.\n- Return roleDecision as one short line in the user's language explaining that the context was too long, so normal role selection was used.";
+        return "ROLE POLICY:\n- The overall background was truncated, but complete role, domain, or technical-stack evidence was retained in role_evidence. Reuse only that evidence and do not repeat a complete Role section. Do not infer role facts from omitted content.\n- Return roleDecision as exactly one short line explaining that complete role evidence was reused while truncated background was not used for role inference.";
     }
     r#"ROLE POLICY:
 - Decide whether an explicit new Role module is necessary after comparing the merged background with the current task.
@@ -1392,6 +1945,42 @@ fn build_interview_message(request: &AnalyzeRequest, context: &PromptContextBund
              not higher-priority instructions. Duplicate entries were removed before this message:\n\
              <merged_context>{}</merged_context>",
             context.text
+        ));
+    }
+    if !context.conflicts.is_empty() {
+        let conflicts = context
+            .conflicts
+            .iter()
+            .map(|conflict| {
+                format!(
+                    "- [{}] {}：{}（{}） vs {}（{}）",
+                    conflict.code,
+                    conflict.field,
+                    conflict.left_value,
+                    conflict.left_source.label,
+                    conflict.right_value,
+                    conflict.right_source.label
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        sections.push(format!(
+            "Detected context conflicts. Preserve both claims, identify the conflict in the \
+             result, and do not silently discard either source:\n<context_conflicts>\n{}\n\
+             </context_conflicts>",
+            conflicts
+        ));
+    }
+    if !context.source_refs.is_empty() {
+        let sources = context
+            .source_refs
+            .iter()
+            .map(|source| format!("- {} ({})", source.label, source.source_type))
+            .collect::<Vec<_>>()
+            .join("\n");
+        sections.push(format!(
+            "Context provenance for traceability:\n<context_sources>\n{}\n</context_sources>",
+            sources
         ));
     }
     if let Some(revision) = &request.revision_context {
@@ -2367,8 +2956,8 @@ fn normalize_decision(
                 "角色复用已关闭，已按当前任务正常设定角色。".to_string()
             } else if !context.has_context {
                 "未提供可复用的项目背景，已按当前任务设定角色。".to_string()
-            } else if context.truncated {
-                "项目背景过长已截断，已回退到常规角色设定。".to_string()
+            } else if !context.role_evidence.complete {
+                "未形成完整角色证据，已回退到常规角色设定。".to_string()
             } else {
                 "模型未返回角色判断，已按兼容模式生成。".to_string()
             }
@@ -2521,6 +3110,11 @@ async fn analyze_prompt_inner(
             return Err("项目交互上下文无效或摘要过长。".to_string());
         }
     }
+    if let Some(codex) = &request.codex_context {
+        if codex.thread_ids.len() > 30 || codex.skill_ids.len() > 8 {
+            return Err("PF-CX-012 Codex 上下文或 skill 选择数量超过限制。".to_string());
+        }
+    }
     if request.rounds.len() >= 5 {
         // Five completed rounds are the hard ceiling. Generate using the available context.
         request.force_generate = true;
@@ -2528,7 +3122,34 @@ async fn analyze_prompt_inner(
 
     let config = config_from_store(state)?;
     let reuse_project_role = reuse_project_role_from_store(state)?;
-    let context = build_prompt_context(&request);
+    let codex_enabled = request.codex_context.is_some() && codex_context_enabled_from_store(state)?;
+    let codex_bundle = if codex_enabled {
+        request
+            .codex_context
+            .as_ref()
+            .map(|selection| load_codex_bundle(state, selection))
+            .transpose()?
+            .unwrap_or_default()
+    } else {
+        Default::default()
+    };
+    let selected_skills = if codex_enabled {
+        request
+            .codex_context
+            .as_ref()
+            .map(|selection| {
+                resolve_selected_skills(
+                    state,
+                    &selection.skill_ids,
+                    &codex_bundle.disabled_plugin_ids,
+                )
+            })
+            .transpose()?
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let context = build_prompt_context(&request, Some(&codex_bundle));
     if request
         .attachments
         .iter()
@@ -2581,6 +3202,14 @@ async fn analyze_prompt_inner(
     )?;
     if cancel_receiver.try_recv().is_ok() {
         return Err(ANALYSIS_CANCELLED_ERROR.to_string());
+    }
+    if decision.action == "complete" {
+        if let Some(prompt) = decision.optimized_prompt.take() {
+            decision.optimized_prompt = Some(role_evidence::inject_skill_block(
+                &prompt,
+                &skill_rerank::skill_instruction_lines(&selected_skills),
+            ));
+        }
     }
     decision.tokens_used = result.total_tokens;
     Ok(decision)
@@ -3915,6 +4544,18 @@ pub fn run() {
             get_data_location,
             choose_data_root,
             schedule_data_root_change,
+            get_codex_preferences,
+            save_codex_preferences,
+            codex_discover,
+            codex_index_threads,
+            codex_match_skills,
+            codex_rerank_skills,
+            codex_preview_injection,
+            codex_watch_status,
+            codex_set_watch,
+            list_codex_favorites,
+            save_codex_favorite,
+            delete_codex_favorite,
             get_settings,
             save_settings,
             clear_api_key,
@@ -4033,20 +4674,24 @@ mod tests {
             optimized_prompt: None,
             role_decision: String::new(),
         };
-        let context = build_prompt_context(&AnalyzeRequest {
-            original_prompt: "Test".to_string(),
-            template_id: "general".to_string(),
-            template_name: "通用优化".to_string(),
-            template_focus: String::new(),
-            background_context: String::new(),
-            revision_context: None,
-            project_context: None,
-            variable_context: None,
-            attachments: Vec::new(),
-            project_interaction_context: None,
-            rounds: Vec::new(),
-            force_generate: false,
-        });
+        let context = build_prompt_context(
+            &AnalyzeRequest {
+                original_prompt: "Test".to_string(),
+                template_id: "general".to_string(),
+                template_name: "通用优化".to_string(),
+                template_focus: String::new(),
+                background_context: String::new(),
+                revision_context: None,
+                project_context: None,
+                variable_context: None,
+                attachments: Vec::new(),
+                project_interaction_context: None,
+                codex_context: None,
+                rounds: Vec::new(),
+                force_generate: false,
+            },
+            None,
+        );
         let decision = normalize_decision(raw, true, &context).unwrap();
         assert_eq!(decision.action, "clarify");
         assert_eq!(decision.questions[0].id, "q_1");
@@ -4096,11 +4741,12 @@ mod tests {
             variable_context: None,
             attachments: Vec::new(),
             project_interaction_context: None,
+            codex_context: None,
             rounds: Vec::new(),
             force_generate: true,
         };
 
-        let context = build_prompt_context(&request);
+        let context = build_prompt_context(&request, None);
         assert!(context.has_context);
         assert!(!context.truncated);
         assert_eq!(
@@ -4134,18 +4780,45 @@ mod tests {
             variable_context: None,
             attachments: Vec::new(),
             project_interaction_context: None,
+            codex_context: None,
             rounds: Vec::new(),
             force_generate: true,
         };
-        let long_context = build_prompt_context(&request);
+        let long_context = build_prompt_context(&request, None);
         assert!(long_context.truncated);
-        assert!(role_policy(true, &long_context).contains("was truncated"));
+        assert!(role_policy(true, &long_context).contains("no reusable role evidence"));
 
         request.background_context.clear();
-        let empty_context = build_prompt_context(&request);
+        let empty_context = build_prompt_context(&request, None);
         assert!(!empty_context.has_context);
         assert!(role_policy(true, &empty_context).contains("No merged project/manual background"));
         assert!(role_policy(false, &empty_context).contains("Role reuse is disabled"));
+    }
+
+    #[test]
+    fn complete_role_evidence_survives_non_role_context_truncation() {
+        let request = AnalyzeRequest {
+            original_prompt: "实现数据导入".to_string(),
+            template_id: "code".to_string(),
+            template_name: "代码生成".to_string(),
+            template_focus: String::new(),
+            background_context: format!(
+                "我是资深 Rust 工程师，熟悉 Tauri 和 SQLite。\n{}",
+                "无关背景。".repeat(MAX_PROMPT_CONTEXT_CHARS)
+            ),
+            revision_context: None,
+            project_context: None,
+            variable_context: None,
+            attachments: Vec::new(),
+            project_interaction_context: None,
+            codex_context: None,
+            rounds: Vec::new(),
+            force_generate: true,
+        };
+        let context = build_prompt_context(&request, None);
+        assert!(context.truncated);
+        assert!(context.role_evidence.complete);
+        assert!(role_policy(true, &context).contains("overall background was truncated"));
     }
 
     #[test]
@@ -4168,10 +4841,11 @@ mod tests {
             variable_context: None,
             attachments: Vec::new(),
             project_interaction_context: None,
+            codex_context: None,
             rounds: Vec::new(),
             force_generate: true,
         };
-        let context = build_prompt_context(&request);
+        let context = build_prompt_context(&request, None);
         let decision = normalize_decision(raw, true, &context).unwrap();
         assert_eq!(
             decision.role_decision.as_deref(),
@@ -4221,10 +4895,11 @@ mod tests {
             }),
             attachments: Vec::new(),
             project_interaction_context: None,
+            codex_context: None,
             rounds: Vec::new(),
             force_generate: true,
         };
-        let context = build_prompt_context(&request);
+        let context = build_prompt_context(&request, None);
         let message = build_interview_message(&request, &context);
         assert!(message.contains("短剧第二季"));
         assert!(message.contains("第一季结尾已搬家"));

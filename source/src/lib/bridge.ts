@@ -2,6 +2,16 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AnalyzeRequest,
   AppSettings,
+  CodexContextSelection,
+  CodexDiscovery,
+  CodexFavorite,
+  CodexFavoriteInput,
+  CodexInjectionPreview,
+  CodexPreferences,
+  CodexQuery,
+  CodexSkillMatch,
+  CodexSkillRerankResult,
+  CodexWatchStatus,
   DataLocationStatus,
   DataRootChangeRequest,
   DataRootInspection,
@@ -32,6 +42,50 @@ export const bridge = {
   scheduleDataRootChange: (input: DataRootChangeRequest) =>
     invoke<DataLocationStatus>("schedule_data_root_change", { input }),
   getSettings: () => invoke<AppSettings>("get_settings"),
+  getCodexPreferences: () =>
+    invoke<CodexPreferences>("get_codex_preferences"),
+  saveCodexPreferences: (enabled: boolean) =>
+    invoke<CodexPreferences>("save_codex_preferences", { enabled }),
+  discoverCodex: (query: CodexQuery) =>
+    invoke<CodexDiscovery>("codex_discover", { query }),
+  indexCodexThreads: (threadIds: string[]) =>
+    invoke<string[]>("codex_index_threads", { threadIds }),
+  matchCodexSkills: (
+    task: string,
+    threadIds: string[],
+    limit = 8,
+  ) =>
+    invoke<CodexSkillRerankResult>("codex_match_skills", {
+      task,
+      threadIds,
+      limit,
+    }),
+  rerankCodexSkills: (
+    task: string,
+    candidates: CodexSkillMatch[],
+  ) =>
+    invoke<CodexSkillRerankResult>("codex_rerank_skills", {
+      task,
+      candidates,
+    }),
+  previewCodexInjection: (
+    originalPrompt: string,
+    selection: CodexContextSelection,
+  ) =>
+    invoke<CodexInjectionPreview>("codex_preview_injection", {
+      originalPrompt,
+      selection,
+    }),
+  getCodexWatchStatus: () =>
+    invoke<CodexWatchStatus>("codex_watch_status"),
+  setCodexWatch: (enabled: boolean) =>
+    invoke<CodexWatchStatus>("codex_set_watch", { enabled }),
+  listCodexFavorites: () =>
+    invoke<CodexFavorite[]>("list_codex_favorites"),
+  saveCodexFavorite: (input: CodexFavoriteInput) =>
+    invoke<CodexFavorite>("save_codex_favorite", { input }),
+  deleteCodexFavorite: (id: string) =>
+    invoke<void>("delete_codex_favorite", { id }),
   saveSettings: (input: SettingsInput) =>
     invoke<AppSettings>("save_settings", { input }),
   clearApiKey: () => invoke<AppSettings>("clear_api_key"),

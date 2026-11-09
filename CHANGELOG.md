@@ -6,6 +6,25 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-11-09
+
+### Added
+
+- Read-only Codex project and conversation discovery with JSONL and Zstandard rollout streaming.
+- Incremental rollout indexing using file size, modification time, SHA-256 digests, and byte offsets.
+- Explainable Codex project association based on explicit project IDs, project roots, and cwd matching.
+- Session search, date filters, archived-thread filtering, compaction summaries, and source read manifests.
+- Local Codex skill discovery and optional model reranking for the top five to eight candidates.
+- Structured role evidence, context conflict reporting, source references, and removable Codex skill blocks.
+- Reference-only favorites for project, thread, and skill combinations.
+- Explicitly opt-in Codex file watching with clean watcher shutdown.
+- Compatibility diagnostics for unknown events, incomplete JSONL lines, plugin cache changes, and project-level skill roots.
+
+### Changed
+
+- Role reuse now evaluates complete role evidence separately from the overall context truncation state.
+- Codex execution guidance is injected into a separate prompt section and never treated as role evidence.
+
 ## [0.10.3] - 2026-10-28
 
 ### Added

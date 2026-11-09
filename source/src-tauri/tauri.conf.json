@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Prompt Forge",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "identifier": "com.promptforge.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../dist"
+    "frontendDist": "../../../提示词优化/PromptForge-Build/dist"
   },
   "app": {
     "windows": [
@@ -34,7 +34,7 @@
     "active": true,
     "useLocalToolsDir": true,
     "publisher": "Prompt Forge",
-    "copyright": "Copyright © 2026 Prompt Forge",
+    "copyright": "Copyright (c) 2026 Prompt Forge",
     "shortDescription": "通过多轮澄清锻造专业提示词",
     "longDescription": "Prompt Forge 是一款本地优先的提示词优化桌面工具，通过可解释的多轮提问，将模糊想法转化为结构化的专业提示词。",
     "icon": [

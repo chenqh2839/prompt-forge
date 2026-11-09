@@ -4,10 +4,10 @@ Prompt Forge is a local-first desktop application for refining prompts through
 structured clarification. It is built with Tauri 2, React, TypeScript, Rust,
 and local SQLite.
 
-> Current source snapshot: **v0.10.3**
+> Current source snapshot: **v0.10.4**
 >
 > Distribution status: **Windows community preview**. The latest published
-> Windows binary is **v0.10.3**. macOS and Linux are not yet verified on real
+> Windows binary is **v0.10.4**. macOS and Linux are not yet verified on real
 > hardware and do not have an official release binary.
 
 ## Repository layout
@@ -29,6 +29,10 @@ The application README is available at
   unfiled, without duplicating or deleting the history entries.
 - Discard the active analysis round, abort its request, and return to the
   editable prompt while preserving the original input and context.
+- Read selected local Codex projects and conversations as an opt-in context
+  source, with incremental indexing and searchable thread filters.
+- Suggest enabled Codex skills from the local catalog and inject removable
+  execution guidance without invoking skills from Prompt Forge.
 - Project context, selected history summaries, and context-budget handling.
 - Project interactions can be converted into reusable prompt templates.
 - Reusable variable prompt templates with ordered sections.
@@ -43,8 +47,8 @@ The application README is available at
 
 | Platform | Status |
 |---|---|
-| Windows 11 x64 | v0.10.3 install, uninstall, launch, SQLite, and UI checks completed on local hardware |
-| Windows 10 x64 | Earlier install and launch smoke tests only; v0.10.3 was not separately retested |
+| Windows 11 x64 | v0.10.4 install, uninstall, launch, SQLite, Codex context, and UI checks completed on local hardware |
+| Windows 10 x64 | Earlier install and launch smoke tests only; v0.10.4 was not separately retested |
 | macOS | Source compatibility only; not covered by the current release CI or run on real hardware |
 | Linux | Source compatibility only; not covered by the current release CI or run on real hardware |
 
@@ -58,14 +62,14 @@ Download the latest published Windows archive from
 
 1. Extract the Windows ZIP attached to the latest available Release.
 2. To install, run the versioned NSIS setup executable in `安装版`.
-3. To use the portable build, run `Prompt Forge.exe`. The v0.10.3 build uses a
+3. To use the portable build, run `Prompt Forge.exe`. The v0.10.4 build uses a
    static WebView2 loader and does not require a separate `WebView2Loader.dll`.
 
 Microsoft Edge WebView2 Runtime is required.
 
 The current installer is not Authenticode-signed. Windows SmartScreen may show
 an "Unknown publisher" warning. Verify the release ZIP with
-`SHA256SUMS-v0.10.3.txt`; it covers the portable executable, NSIS installer,
+`SHA256SUMS-v0.10.4.txt`; it covers the portable executable, NSIS installer,
 and ZIP. The extracted archive also contains its own
 `SHA256SUMS.txt` for individual files. SHA-256 verification confirms file
 integrity, not publisher identity.
@@ -102,6 +106,23 @@ an unencrypted network connection.
 The application does not include API keys or model credits. Token usage and
 provider charges are billed by the service selected by the user. A real cloud
 provider call has not yet been validated with the owner's API key.
+
+## Codex local context
+
+Codex context reading is opt-in and local-first. When explicitly enabled,
+Prompt Forge can read Codex project and thread metadata, stream JSONL or
+Zstandard rollouts, index changed files by size, mtime, SHA-256, and byte
+offset, and expose search, date, and archived-thread filters.
+
+The default conversation extractor includes only user and assistant messages.
+Reasoning, tool output, credentials, logs, binary files, and build artifacts
+are excluded unless a separate advanced option is selected. Reading a local
+file does not change it, and Prompt Forge never writes to Codex databases.
+
+Enabled Codex skills are presented as removable routing suggestions in a
+separate prompt section. Prompt Forge only generates text; it does not launch
+Codex or execute a skill. File watching is disabled by default and is stopped
+when the user disables it.
 
 ## Privacy and local data
 

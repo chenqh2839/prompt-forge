@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowRight,
   Braces,
+  BrainCircuit,
   Check,
   ChevronDown,
   CornerDownLeft,
@@ -34,6 +35,8 @@ interface PromptWorkspaceProps {
   setAttachmentBusy: (busy: boolean) => void;
   interactionContextPanel: ReactNode;
   interactionContextReady: boolean;
+  codexContextSummary: string;
+  onOpenCodexContext: () => void;
   visionSupported: boolean;
   model: string;
   keepAttachmentsAfterSubmit: boolean;
@@ -77,6 +80,8 @@ export function PromptWorkspace({
   setAttachmentBusy,
   interactionContextPanel,
   interactionContextReady,
+  codexContextSummary,
+  onOpenCodexContext,
   visionSupported,
   model,
   keepAttachmentsAfterSubmit,
@@ -165,6 +170,25 @@ export function PromptWorkspace({
           placeholder="在开始前补充已有背景，例如项目现状、已有决策、受众信息、必须保留的约束或参考资料摘要……"
         />
       </div>
+
+      <button
+        type="button"
+        className={`codex-context-trigger ${
+          codexContextSummary ? "active" : ""
+        }`}
+        onClick={onOpenCodexContext}
+        disabled={busy}
+      >
+        <BrainCircuit size={16} />
+        <span>
+          <strong>Codex 上下文与 Skills</strong>
+          <small>
+            {codexContextSummary ||
+              "只读接入本机项目、会话与已启用 skills；默认关闭"}
+          </small>
+        </span>
+        <ArrowRight size={14} />
+      </button>
 
       {interactionContextPanel}
 
