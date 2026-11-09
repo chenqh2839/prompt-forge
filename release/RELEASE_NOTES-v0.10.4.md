@@ -32,6 +32,7 @@
 - Prompt Forge 不启动 Codex、不写 Codex 数据库，也不执行任何 skill。
 - Codex 内部格式变化会降级为可用路径并显示诊断，不会阻止普通提示词生成。
 - 现有历史记录、项目关联、API Key、数据目录和导出行为保持兼容。
+- Windows 安装包未进行商业代码签名，SmartScreen 可能显示“未知发布者”；请先使用本页 SHA-256 和 `SHA256SUMS-v0.10.4.txt` 校验下载内容。
 
 ## 已知限制
 
