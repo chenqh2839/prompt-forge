@@ -88,7 +88,7 @@ export function ResultPanel({
         </div>
       )}
 
-      {codexContext && codexContext.segments.length > 0 && (
+      {prompt && codexContext && codexContext.segments.length > 0 && (
         <section className="result-context-provenance" aria-label="Codex 上下文注入">
           <div className="result-context-heading">
             <span>CONTEXT INJECTION</span>

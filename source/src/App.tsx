@@ -556,11 +556,11 @@ export default function App() {
 
         if (activeAnalysisRequestRef.current !== requestId) return;
         setAnalysisRunState("done");
-        setLastCodexContext(result.codexContext ?? null);
 
         setRationale(result.rationale);
         setRoleDecision(result.roleDecision ?? "");
         if (result.action === "complete" && result.optimizedPrompt) {
+          setLastCodexContext(result.codexContext ?? null);
           await handleComplete(
             result.optimizedPrompt,
             transcriptRounds,
@@ -735,6 +735,7 @@ export default function App() {
     setBatchProgress({ current: 1, total: items.length });
 
     const completed: PromptVariant[] = [];
+    let batchCodexContext: CodexContextBundle | null = null;
     try {
       for (const [index, item] of items.entries()) {
         setBatchProgress({ current: index + 1, total: items.length });
@@ -794,6 +795,9 @@ export default function App() {
           tokensUsed: result.tokensUsed,
           historyId: saved.id,
         });
+        if (completed.length === 1) {
+          batchCodexContext = result.codexContext ?? null;
+        }
         setTokensUsed((current) => current + (result.tokensUsed ?? 0));
         setVariants([...completed]);
         setActiveVariantId(completed[0].id);
@@ -804,6 +808,7 @@ export default function App() {
         `变量流程“${workflow.name}”已生成 ${completed.length} 个实例。`,
       );
       setStage("complete");
+      setLastCodexContext(batchCodexContext);
       setLastReadAttachmentNames(
         attachments.map((attachment) => attachment.name),
       );
@@ -814,6 +819,7 @@ export default function App() {
     } catch (batchError) {
       setVariants(completed);
       if (completed.length) {
+        setLastCodexContext(batchCodexContext);
         setActiveVariantId(completed[0].id);
         setOptimizedPrompt(completed[0].optimizedPrompt);
         setStage("complete");
@@ -910,6 +916,7 @@ export default function App() {
       if (!result.optimizedPrompt) {
         throw new Error("模型返回了空结果。");
       }
+      setLastCodexContext(result.codexContext ?? null);
       await handleComplete(
         result.optimizedPrompt,
         rounds,
@@ -980,6 +987,7 @@ export default function App() {
         throw new Error("模型没有返回修改后的提示词。");
       }
       setOptimizedPrompt(result.optimizedPrompt);
+      setLastCodexContext(result.codexContext ?? null);
       if (attachments.length) {
         setLastReadAttachmentNames(
           attachments.map((attachment) => attachment.name),

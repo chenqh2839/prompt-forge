@@ -40,8 +40,8 @@
 
 | 资产 | 大小 | SHA-256 |
 |---|---:|---|
-| `prompt-forge.exe` | 17,228,288 | `f95f25e1a45bb8b529dbc18263a73d09563948383c2eef254bcded87a8302ec1` |
-| `Prompt.Forge_0.10.4_x64-setup.exe` | 5,197,531 | `6c9c85676ce19f72ad6ae74811cf7468a4c093bbbdadb1e816ce3f8b7f00093c` |
-| `PromptForge-0.10.4-Windows-x64.zip` | 12,146,107 | `051c8718144138e52817dbcf55e5a4f66819ff42ce7008df230d0def15b29793` |
+| `prompt-forge.exe` | 17,420,800 | `a3dfcce8c3fd6f0eb8a217d7002ea49f028727a140447a3d48f9584a73f173f4` |
+| `Prompt.Forge_0.10.4_x64-setup.exe` | 5,384,177 | `61de35d87b1fafaf8edfef93bd9e56b93600c40dd0f368af33f56da2934180ef` |
+| `PromptForge-0.10.4-Windows-x64.zip` | 12,526,963 | `39ddd905a41c1ebd4a130ad85f299e69a4780cfe7f2462acb4005ab0b55a5797` |
 
 `SHA256SUMS-v0.10.4.txt` 覆盖以上三个二进制资产。
