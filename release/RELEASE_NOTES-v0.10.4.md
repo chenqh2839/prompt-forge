@@ -24,6 +24,7 @@
 - skill 指令仍位于独立可移除区块；移除后原始提示词和 Codex 上下文保持不变。
 - 修复优化结果被较长的 Codex 来源内容挤出可视区域的问题；提示词和复制按钮现在始终优先可见，结果面板可独立滚动。
 - Codex 来源详情改为结果下方的可展开区域，不再遮挡最终提示词。
+- 修复复制结果混入 Codex 上下文的问题；剪贴板现在只包含可直接使用的优化提示词正文，不包含背景、来源、追问记录或角色判断。
 
 ## 安全与兼容
 
@@ -42,8 +43,8 @@
 
 | 资产 | 大小 | SHA-256 |
 |---|---:|---|
-| `prompt-forge.exe` | 17,633,792 | `4a6abe2d2611baebfea60146e93c9afeb217f9a7023f9a511d9a6c109d3939c1` |
-| `Prompt.Forge_0.10.4_x64-setup.exe` | 5,550,000 | `642c8035b8722886c3853f9af10587c1af83cd581c114bc1684cbf6d5862170d` |
-| `PromptForge-0.10.4-Windows-x64.zip` | 12,904,534 | `96038327fa146d0a9163bd8ede9f288bc442a628ac62aa9c15c4ed29a87e16f9` |
+| `prompt-forge.exe` | 17,826,304 | `517e1a7e21af15309b321ec3d60b0ac2eb5664845ae9d761a86d4c296ef7073e` |
+| `Prompt.Forge_0.10.4_x64-setup.exe` | 5,728,919 | `f7b27289a7ee158db8dd755807eec84beb70464e39e776585923a222122843e7` |
+| `PromptForge-0.10.4-Windows-x64.zip` | 13,277,501 | `2064bd84ea6e85457fb3af0f42f0fb0ce0935b481f13d63ebad5c07ffe77d0c9` |
 
 `SHA256SUMS-v0.10.4.txt` 覆盖以上三个二进制资产。

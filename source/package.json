@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:copy": "node --test scripts/verify-prompt-copy.ts",
     "preview": "vite preview",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",

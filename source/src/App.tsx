@@ -15,6 +15,7 @@ import {
   Sun,
 } from "lucide-react";
 import { bridge } from "./lib/bridge";
+import { copyablePrompt } from "./lib/prompt-copy";
 import { findTemplate, templates as builtInTemplates } from "./lib/templates";
 import type {
   AppSettings,
@@ -1274,7 +1275,11 @@ export default function App() {
 
   const handleCopy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      const output = copyablePrompt(text);
+      if (!output) {
+        throw new Error("复制内容为空");
+      }
+      await navigator.clipboard.writeText(output);
       showToast("已复制到剪贴板");
     } catch {
       setError("复制失败，请手动选择文本。");

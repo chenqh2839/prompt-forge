@@ -35,6 +35,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   the user's original prompt from the injected project and conversation context.
 - The result panel now keeps the generated prompt and copy controls visible, uses an independently scrollable layout,
   and presents Codex provenance as a secondary expandable section instead of letting it obscure the final output.
+- Copy actions now remove the internal Codex context block before writing to the clipboard, so pasted output contains
+  only the ready-to-use optimized prompt body.
 
 ## [0.10.3] - 2026-10-28
 

@@ -39,6 +39,8 @@ The application README is available at
   block that is included in the generated prompt.
 - Keep the generated prompt and copy controls visible even when Codex source
   details are present; source details can be expanded separately.
+- Copy only the ready-to-use optimized prompt body; Codex context, provenance,
+  clarification answers, role rationale, and interface labels stay out of the clipboard.
 - Project context, selected history summaries, and context-budget handling.
 - Project interactions can be converted into reusable prompt templates.
 - Reusable variable prompt templates with ordered sections.
