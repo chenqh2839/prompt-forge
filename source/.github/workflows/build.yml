@@ -27,6 +27,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
       PROMPT_FORGE_DIST_DIR: ${{ github.workspace }}/dist
       PROMPT_FORGE_VITE_CACHE_DIR: ${{ github.workspace }}/node_modules/.vite
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +69,23 @@ jobs:
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test
+
+      - name: Prepare Tauri NSIS utility plugin
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $destination = "src-tauri/target/.tauri/NSIS/Plugins/x86-unicode/additional"
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          $download = Join-Path $env:RUNNER_TEMP "nsis-tauri-utils"
+          New-Item -ItemType Directory -Path $download -Force | Out-Null
+          gh release download nsis_tauri_utils-v0.5.3 `
+            --repo tauri-apps/nsis-tauri-utils `
+            --pattern "nsis_tauri_utils.dll" `
+            --dir $download `
+            --clobber
+          Copy-Item -LiteralPath (Join-Path $download "nsis_tauri_utils.dll") `
+            -Destination (Join-Path $destination "nsis_tauri_utils.dll") `
+            -Force
 
       - name: Tauri build
         run: pnpm tauri build --config src-tauri/tauri.ci.conf.json
