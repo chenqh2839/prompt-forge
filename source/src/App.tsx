@@ -20,6 +20,7 @@ import type {
   AppSettings,
   ClarificationQuestion,
   ClarificationTurn,
+  CodexContextBundle,
   CodexContextSelection,
   HistoryItem,
   MoveHistoryResult,
@@ -130,6 +131,8 @@ export default function App() {
   const [codexContextOpen, setCodexContextOpen] = useState(false);
   const [codexContextSelection, setCodexContextSelection] =
     useState<CodexContextSelection | null>(null);
+  const [lastCodexContext, setLastCodexContext] =
+    useState<CodexContextBundle | null>(null);
   const [customTemplates, setCustomTemplates] = useState<
     TemplateDefinition[]
   >([]);
@@ -553,6 +556,7 @@ export default function App() {
 
         if (activeAnalysisRequestRef.current !== requestId) return;
         setAnalysisRunState("done");
+        setLastCodexContext(result.codexContext ?? null);
 
         setRationale(result.rationale);
         setRoleDecision(result.roleDecision ?? "");
@@ -644,6 +648,7 @@ export default function App() {
       setRevisionCount(0);
       setTokensUsed(0);
       setError("");
+      setLastCodexContext(null);
       setAnalysisRunState("idle");
       setAnalysisCancelBusy(false);
       analysisCancelPendingRef.current = false;
@@ -676,6 +681,7 @@ export default function App() {
     setTokensUsed(0);
     setActiveHistoryId(null);
     setLastReadAttachmentNames([]);
+    setLastCodexContext(null);
     setLastSourceHistoryIds([]);
     setVariants([]);
     setActiveVariantId(null);
@@ -1589,6 +1595,8 @@ export default function App() {
             stage={stage}
             tokensUsed={tokensUsed}
             model={settings.model}
+            originalPrompt={originalPrompt}
+            codexContext={lastCodexContext}
             variants={variants}
             activeVariantId={activeVariantId}
             onCopy={() => handleCopy(optimizedPrompt)}

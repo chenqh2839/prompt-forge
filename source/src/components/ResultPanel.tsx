@@ -10,7 +10,7 @@ import {
   Send,
   Sparkles,
 } from "lucide-react";
-import type { PromptVariant, Stage } from "../types";
+import type { CodexContextBundle, PromptVariant, Stage } from "../types";
 
 interface ResultPanelProps {
   prompt: string;
@@ -29,6 +29,8 @@ interface ResultPanelProps {
   attachmentNames: string[];
   sourceHistoryIds: string[];
   roleDecision: string;
+  originalPrompt: string;
+  codexContext: CodexContextBundle | null;
 }
 
 export function ResultPanel({
@@ -48,6 +50,8 @@ export function ResultPanel({
   attachmentNames,
   sourceHistoryIds,
   roleDecision,
+  originalPrompt,
+  codexContext,
 }: ResultPanelProps) {
   const [feedback, setFeedback] = useState("");
   const [revising, setRevising] = useState(false);
@@ -82,6 +86,33 @@ export function ResultPanel({
           <span>角色判断</span>
           <p>{roleDecision}</p>
         </div>
+      )}
+
+      {codexContext && codexContext.segments.length > 0 && (
+        <section className="result-context-provenance" aria-label="Codex 上下文注入">
+          <div className="result-context-heading">
+            <span>CONTEXT INJECTION</span>
+            <strong>Codex 上下文已注入</strong>
+          </div>
+          <div className="result-original-prompt">
+            <span>用户原始提示词</span>
+            <pre>{originalPrompt}</pre>
+          </div>
+          <div className="result-codex-sources">
+            <span>Codex 上下文与来源</span>
+            {codexContext.segments.map((segment) => (
+              <details key={segment.id} open>
+                <summary>
+                  {segment.sourceLabel}
+                  <small>
+                    {segment.sourceType} · {Math.round(segment.confidence * 100)}%
+                  </small>
+                </summary>
+                <pre>{segment.text}</pre>
+              </details>
+            ))}
+          </div>
+        </section>
       )}
 
       {variants.length > 1 && (

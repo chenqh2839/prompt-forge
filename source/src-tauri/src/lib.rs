@@ -434,6 +434,8 @@ struct PromptAnalysis {
     optimized_prompt: Option<String>,
     #[serde(default)]
     tokens_used: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    codex_context: Option<codex_index::CodexContextBundle>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1225,6 +1227,7 @@ fn load_codex_bundle(
         return Ok(codex_index::CodexContextBundle::default());
     }
     let query = codex_index::CodexQuery {
+        project_id: selection.project_id.clone(),
         search: selection.search.clone(),
         from_ms: selection.from_ms,
         to_ms: selection.to_ms,
@@ -1453,12 +1456,14 @@ fn codex_preview_injection(
     let selected =
         resolve_selected_skills(&state, &selection.skill_ids, &bundle.disabled_plugin_ids)?;
     let skill_lines = skill_rerank::skill_instruction_lines(&selected);
-    let injected = role_evidence::inject_skill_block(&original_prompt, &skill_lines);
+    let context_injected = codex_index::inject_context_block(&original_prompt, &bundle);
+    let injected = role_evidence::inject_skill_block(&context_injected, &skill_lines);
     Ok(json!({
         "originalPrompt": original_prompt,
         "injectedPrompt": injected,
+        "contextBlock": codex_index::render_context_block(&bundle),
         "contextText": bundle.segments.iter().map(|segment| {
-            format!("### {}\n{}", segment.source_label, segment.text)
+            format!("### 来源 · {}\n{}", segment.source_label, segment.text)
         }).collect::<Vec<_>>().join("\n\n"),
         "skillBlock": skill_lines.join("\n"),
         "skillMatches": selected,
@@ -2973,6 +2978,7 @@ fn normalize_decision(
             optimized_prompt: Some(optimized_prompt),
             role_decision: Some(role_decision),
             tokens_used: None,
+            codex_context: None,
         });
     }
 
@@ -3017,6 +3023,7 @@ fn normalize_decision(
         optimized_prompt: None,
         role_decision: normalize_role_decision(&raw.role_decision),
         tokens_used: None,
+        codex_context: None,
     })
 }
 
@@ -3205,12 +3212,14 @@ async fn analyze_prompt_inner(
     }
     if decision.action == "complete" {
         if let Some(prompt) = decision.optimized_prompt.take() {
+            let prompt = codex_index::inject_context_block(&prompt, &codex_bundle);
             decision.optimized_prompt = Some(role_evidence::inject_skill_block(
                 &prompt,
                 &skill_rerank::skill_instruction_lines(&selected_skills),
             ));
         }
     }
+    decision.codex_context = (!codex_bundle.segments.is_empty()).then_some(codex_bundle);
     decision.tokens_used = result.total_tokens;
     Ok(decision)
 }

@@ -31,8 +31,12 @@ The application README is available at
   editable prompt while preserving the original input and context.
 - Read selected local Codex projects and conversations as an opt-in context
   source, with incremental indexing and searchable thread filters.
+- Filter conversations by Codex project with visible association confidence and
+  evidence, including cwd/project-root and global-state fallback mappings.
 - Suggest enabled Codex skills from the local catalog and inject removable
   execution guidance without invoking skills from Prompt Forge.
+- Show the original prompt separately from the source-labelled Codex context
+  block that is included in the generated prompt.
 - Project context, selected history summaries, and context-budget handling.
 - Project interactions can be converted into reusable prompt templates.
 - Reusable variable prompt templates with ordered sections.

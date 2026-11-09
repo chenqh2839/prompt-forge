@@ -25,6 +25,15 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Role reuse now evaluates complete role evidence separately from the overall context truncation state.
 - Codex execution guidance is injected into a separate prompt section and never treated as role evidence.
 
+### Fixed
+
+- Selecting a Codex project now filters the conversation list by the resolved project association and keeps each
+  conversation's confidence level and evidence source visible.
+- Codex project roots now match Windows extended-length paths such as `\\?\D:\...`, and global-state project aliases
+  are normalized to the project IDs exposed by the current Codex state database.
+- Generated prompts now include a deterministic, source-labelled Codex context block, while the result panel separates
+  the user's original prompt from the injected project and conversation context.
+
 ## [0.10.3] - 2026-10-28
 
 ### Added

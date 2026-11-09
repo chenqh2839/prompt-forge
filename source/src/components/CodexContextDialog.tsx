@@ -124,12 +124,13 @@ export function CodexContextDialog({
 
   const query = useMemo(
     () => ({
+      projectId: projectId || null,
       search,
       fromMs: fromDateInput(fromDate),
       toMs: fromDateInput(toDate, true),
       includeArchived,
     }),
-    [fromDate, includeArchived, search, toDate],
+    [fromDate, includeArchived, projectId, search, toDate],
   );
 
   const load = useCallback(async () => {

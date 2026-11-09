@@ -49,6 +49,7 @@ export interface PromptAnalysis {
   questions: ClarificationQuestion[];
   optimizedPrompt?: string;
   tokensUsed?: number;
+  codexContext?: CodexContextBundle;
 }
 
 export interface AppSettings {
@@ -267,6 +268,7 @@ export interface CodexDiscovery {
 }
 
 export interface CodexQuery {
+  projectId?: string | null;
   search?: string;
   fromMs?: number | null;
   toMs?: number | null;
@@ -320,12 +322,29 @@ export interface CodexReadManifest {
 export interface CodexInjectionPreview {
   originalPrompt: string;
   injectedPrompt: string;
+  contextBlock: string;
   contextText: string;
   skillBlock: string;
   skillMatches: CodexSkillMatch[];
   filesRead: CodexReadManifest[];
   diagnostics: CodexDiagnostic[];
   hasSkillBlock: boolean;
+}
+
+export interface CodexContextSegment {
+  id: string;
+  sourceType: string;
+  sourceLabel: string;
+  text: string;
+  contentHash: string;
+  confidence: number;
+}
+
+export interface CodexContextBundle {
+  segments: CodexContextSegment[];
+  filesRead: CodexReadManifest[];
+  diagnostics: CodexDiagnostic[];
+  disabledPluginIds: string[];
 }
 
 export interface CodexWatchStatus {
