@@ -88,33 +88,6 @@ export function ResultPanel({
         </div>
       )}
 
-      {prompt && codexContext && codexContext.segments.length > 0 && (
-        <section className="result-context-provenance" aria-label="Codex 上下文注入">
-          <div className="result-context-heading">
-            <span>CONTEXT INJECTION</span>
-            <strong>Codex 上下文已注入</strong>
-          </div>
-          <div className="result-original-prompt">
-            <span>用户原始提示词</span>
-            <pre>{originalPrompt}</pre>
-          </div>
-          <div className="result-codex-sources">
-            <span>Codex 上下文与来源</span>
-            {codexContext.segments.map((segment) => (
-              <details key={segment.id} open>
-                <summary>
-                  {segment.sourceLabel}
-                  <small>
-                    {segment.sourceType} · {Math.round(segment.confidence * 100)}%
-                  </small>
-                </summary>
-                <pre>{segment.text}</pre>
-              </details>
-            ))}
-          </div>
-        </section>
-      )}
-
       {variants.length > 1 && (
         <div className="variant-tabs" aria-label="变量实例">
           {variants.map((variant, index) => (
@@ -178,6 +151,40 @@ export function ResultPanel({
             <span>MODEL / {model}</span>
             <span>{tokensUsed ? `API ${tokensUsed} TOKENS` : "LOCAL SAVED"}</span>
           </div>
+          {codexContext && codexContext.segments.length > 0 && (
+            <details
+              className="result-context-provenance"
+              aria-label="Codex 上下文注入"
+            >
+              <summary className="result-context-heading">
+                <span>CONTEXT INJECTION</span>
+                <strong>
+                  Codex 上下文已注入 · {codexContext.segments.length} 个来源
+                </strong>
+              </summary>
+              <div className="result-context-content">
+                <div className="result-original-prompt">
+                  <span>用户原始提示词</span>
+                  <pre>{originalPrompt}</pre>
+                </div>
+                <div className="result-codex-sources">
+                  <span>Codex 上下文与来源</span>
+                  {codexContext.segments.map((segment) => (
+                    <details key={segment.id}>
+                      <summary>
+                        {segment.sourceLabel}
+                        <small>
+                          {segment.sourceType} ·{" "}
+                          {Math.round(segment.confidence * 100)}%
+                        </small>
+                      </summary>
+                      <pre>{segment.text}</pre>
+                    </details>
+                  ))}
+                </div>
+              </div>
+            </details>
+          )}
           {attachmentNames.length > 0 && (
             <div className="artifact-attachments" aria-label="本次已读取的附件">
               <Paperclip size={13} />

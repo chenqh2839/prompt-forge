@@ -33,6 +33,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   are normalized to the project IDs exposed by the current Codex state database.
 - Generated prompts now include a deterministic, source-labelled Codex context block, while the result panel separates
   the user's original prompt from the injected project and conversation context.
+- The result panel now keeps the generated prompt and copy controls visible, uses an independently scrollable layout,
+  and presents Codex provenance as a secondary expandable section instead of letting it obscure the final output.
 
 ## [0.10.3] - 2026-10-28
 

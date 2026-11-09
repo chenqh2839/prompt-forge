@@ -22,6 +22,8 @@
 - 修复 Windows 扩展路径 `\\?\D:\...` 与项目根无法匹配的问题。
 - 修复 Codex global-state 旧项目 ID 与当前状态数据库项目 ID 未归一的关联问题。
 - skill 指令仍位于独立可移除区块；移除后原始提示词和 Codex 上下文保持不变。
+- 修复优化结果被较长的 Codex 来源内容挤出可视区域的问题；提示词和复制按钮现在始终优先可见，结果面板可独立滚动。
+- Codex 来源详情改为结果下方的可展开区域，不再遮挡最终提示词。
 
 ## 安全与兼容
 
@@ -40,8 +42,8 @@
 
 | 资产 | 大小 | SHA-256 |
 |---|---:|---|
-| `prompt-forge.exe` | 17,420,800 | `a3dfcce8c3fd6f0eb8a217d7002ea49f028727a140447a3d48f9584a73f173f4` |
-| `Prompt.Forge_0.10.4_x64-setup.exe` | 5,384,177 | `61de35d87b1fafaf8edfef93bd9e56b93600c40dd0f368af33f56da2934180ef` |
-| `PromptForge-0.10.4-Windows-x64.zip` | 12,526,963 | `39ddd905a41c1ebd4a130ad85f299e69a4780cfe7f2462acb4005ab0b55a5797` |
+| `prompt-forge.exe` | 17,633,792 | `4a6abe2d2611baebfea60146e93c9afeb217f9a7023f9a511d9a6c109d3939c1` |
+| `Prompt.Forge_0.10.4_x64-setup.exe` | 5,550,000 | `642c8035b8722886c3853f9af10587c1af83cd581c114bc1684cbf6d5862170d` |
+| `PromptForge-0.10.4-Windows-x64.zip` | 12,904,534 | `96038327fa146d0a9163bd8ede9f288bc442a628ac62aa9c15c4ed29a87e16f9` |
 
 `SHA256SUMS-v0.10.4.txt` 覆盖以上三个二进制资产。

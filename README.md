@@ -37,6 +37,8 @@ The application README is available at
   execution guidance without invoking skills from Prompt Forge.
 - Show the original prompt separately from the source-labelled Codex context
   block that is included in the generated prompt.
+- Keep the generated prompt and copy controls visible even when Codex source
+  details are present; source details can be expanded separately.
 - Project context, selected history summaries, and context-budget handling.
 - Project interactions can be converted into reusable prompt templates.
 - Reusable variable prompt templates with ordered sections.

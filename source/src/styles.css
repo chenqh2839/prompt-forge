@@ -2531,8 +2531,6 @@ button:disabled {
 }
 
 .result-context-provenance {
-  display: grid;
-  gap: 10px;
   margin-bottom: 12px;
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--line));
@@ -2545,6 +2543,8 @@ button:disabled {
   justify-content: space-between;
   gap: 8px;
   align-items: baseline;
+  cursor: pointer;
+  list-style-position: inside;
 }
 
 .result-context-heading span,
@@ -2565,6 +2565,12 @@ button:disabled {
 .result-codex-sources {
   display: grid;
   gap: 6px;
+}
+
+.result-context-content {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .result-context-provenance pre {
@@ -2743,7 +2749,8 @@ button:disabled {
   min-width: 0;
   min-height: 0;
   padding: 27px 22px 18px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-left: 1px solid var(--line);
   background:
     linear-gradient(160deg, color-mix(in srgb, var(--blue) 2.5%, transparent), transparent 34%),
@@ -2793,10 +2800,19 @@ button:disabled {
 }
 
 .artifact-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
   justify-content: flex-end;
   margin: 18px 0 9px;
+  padding: 6px 0;
   gap: 6px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--bg-color) 96%, transparent) 72%,
+    transparent
+  );
 }
 
 .variant-tabs {
@@ -2859,14 +2875,19 @@ button:disabled {
   color: var(--text);
 }
 
+.artifact-toolbar button:first-child {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--line));
+  color: var(--accent-color);
+}
+
 .artifact-body {
   display: flex;
-  min-height: 0;
+  min-height: 280px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-0);
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
   box-shadow: 0 20px 40px color-mix(in srgb, var(--shadow-color) 16%, transparent);
 }
